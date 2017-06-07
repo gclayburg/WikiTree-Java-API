@@ -1,18 +1,25 @@
-package xyz.kenosee.wikitree.api.util;
+/*
+ * Copyright © 2017 Daniel Boulet
+ */
 
+package com.matilda.wikitree.api.util;
+
+import com.matilda.wikitree.api.WikiTreeApiClient;
+import com.matilda.wikitree.api.exceptions.ReallyBadNewsError;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import xyz.kenosee.wikitree.api.exceptions.ReallyBadNewsError;
 
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
+import java.util.Map;
 import java.util.TimeZone;
 
 /**
@@ -20,7 +27,7 @@ import java.util.TimeZone;
  */
 
 @SuppressWarnings("WeakerAccess")
-public class MiscUtilities {
+public class WikiTreeApiUtilities {
 
     private static final SimpleDateFormat STANDARD_MS = new SimpleDateFormat( "yyyy-MM-dd'T'HH:mm:ss.SSSZ" );
 
@@ -29,7 +36,7 @@ public class MiscUtilities {
     public static final String JAVA_NEWLINE = String.format( "%n" );
 
     @Nullable
-    public static Object readResponse( HttpURLConnection connection, boolean expectSingleResult )
+    public static Object readResponse( HttpURLConnection connection, @SuppressWarnings("SameParameterValue") boolean expectSingleResult )
 	    throws IOException, ParseException {
 
 	StringBuilder sb = new StringBuilder();
@@ -48,7 +55,7 @@ public class MiscUtilities {
 	    readFromConnection( false, sb, reader );
 
 	    String responseString = sb.toString();
-	    System.out.println( "got response:  " + sb );
+//	    System.out.println( "got response:  " + sb );
 
 	    if ( responseString.isEmpty() ) {
 
@@ -62,7 +69,7 @@ public class MiscUtilities {
 
 		    if ( arrayResponse.size() == 1 ) {
 
-			System.out.println( "one entity in response" );
+//			System.out.println( "one entity in response" );
 			Object singleResult = arrayResponse.get( 0 );
 			if ( singleResult == null ) {
 
@@ -101,6 +108,7 @@ public class MiscUtilities {
 
 	    } else if ( responseString.startsWith( "{" ) ) {
 
+		@SuppressWarnings("UnnecessaryLocalVariable")
 		JSONObject objectResponse = parseJsonObject( responseString );
 
 		return objectResponse;
@@ -120,6 +128,45 @@ public class MiscUtilities {
 	}
     }
 
+    public static String cleanupStringDate( Object stringDateObj ) {
+
+        if ( stringDateObj instanceof String ) {
+
+            return cleanupStringDate( (String)stringDateObj );
+
+	} else if ( stringDateObj == null ) {
+
+	    return null;
+
+	} else {
+
+            throw new IllegalArgumentException( "string date is not a string (it is a " + stringDateObj.getClass().getCanonicalName() + ")" );
+
+	}
+
+    }
+
+    public static String cleanupStringDate( String stringDate ) {
+
+        if ( stringDate == null ) {
+
+	    return "<<unknown>>";
+
+	} else {
+
+            String rval = stringDate;
+            while ( rval.endsWith( "-00" ) ) {
+
+                rval = rval.substring( 0, rval.length() - 3 );
+
+	    }
+
+	    return rval;
+
+	}
+
+    }
+
     /**
      Manage pretty printing with a particular emphasis on making it easy to emit commas in all the right places.
      */
@@ -130,8 +177,6 @@ public class MiscUtilities {
 
 	private StringBuilder _lastOutputLine;
 	private StringBuilder _currentOutputLine;
-
-	private static String s_newline = String.format( "%n" );
 
 	/**
 	 Create a pretty line manager instance.
@@ -254,7 +299,7 @@ public class MiscUtilities {
      Mark this as a utilities class.
      */
 
-    private MiscUtilities() {
+    private WikiTreeApiUtilities() {
         super();
     }
 
@@ -268,11 +313,11 @@ public class MiscUtilities {
 
     public static String formatStandardMs( Date dateTime ) {
 
-	synchronized ( MiscUtilities.STANDARD_MS ) {
+	synchronized ( WikiTreeApiUtilities.STANDARD_MS ) {
 
-	    MiscUtilities.STANDARD_MS.setTimeZone( TimeZone.getDefault() );
+	    WikiTreeApiUtilities.STANDARD_MS.setTimeZone( TimeZone.getDefault() );
 	    @SuppressWarnings("UnnecessaryLocalVariable")
-	    String rval = MiscUtilities.STANDARD_MS.format( dateTime );
+	    String rval = WikiTreeApiUtilities.STANDARD_MS.format( dateTime );
 	    return rval;
 
 	}
@@ -427,7 +472,7 @@ public class MiscUtilities {
 
         if ( copies < 0 ) {
 
-            throw new IllegalArgumentException( "MiscUtilities.repl:  invalid copies value (" + copies + ")" );
+            throw new IllegalArgumentException( "WikiTreeApiUtilities.repl:  invalid copies value (" + copies + ")" );
 
 	}
 
@@ -447,12 +492,10 @@ public class MiscUtilities {
      <p/>{@link JSONArray} and {@link JSONObject} instances get the full treatment (indented lines, curly or square brackets, etc).
      {@link String} instances get encoded using {@link #enquoteForJavaString(String)}.
      Everything else gets the {@code String.valueOf( thing )} treatment.
-     <p/>This is intended to be an easy-to-use pretty printer. See {@link #prettyPrintJsonThing(int, String, Object, PrettyLineManager)}
+     <p/>This is intended to be an easy-to-use pretty printer. See {@link #prettyFormatJsonThing(int, String, Object, PrettyLineManager)}
      for the more flexible and elaborate version (which is what does the actually pretty printing that this method is claiming credit for).
      @param name the optional name of the thing.
      @param thing the thing being pretty-printed.
-     @return a {@link StringBuffer} containing the entire pretty-printed result (we return a {@link StringBuffer} instead of something
-     more modern because that's what we can get out of the {@link StringWriter} that we buffer the pretty-printing into.
      <p/>If the provided Json thing is valid then the contents of the returned {@link StringBuffer} are intended
      to be parseable by {@link #parseJsonArray(String)} or {@link #parseJsonObject(String)}.
      Roughly speaking, the Json thing is valid if:
@@ -462,36 +505,76 @@ public class MiscUtilities {
      which can legitimately appear within a {@link JSONArray} or a {@link JSONObject}.</li>
      <li>if it has a name then the name is a {@link String} instance.</li>
      </ul>
-     @throws IOException if something goes wrong writing the pretty-printed lines.
+     @throws ReallyBadNewsError if an IOException gets thrown while generating the pretty-printed lines
+     (this strikes me as impossible which is why this method doesn't throw the IOException).
      */
 
-    public static StringBuffer prettyPrintJsonThing( @SuppressWarnings("SameParameterValue") String name, Object thing )
-	    throws IOException {
+    public static void prettyPrintJsonThing( String name, Object thing )
+	    /*throws IOException*/ {
 
-        StringWriter sw = new StringWriter();
-	PrettyLineManager plm = new PrettyLineManager( sw );
-	try {
-
-	    prettyPrintJsonThing( 0, name, thing, plm );
-
-	} finally {
-
-	    plm.flush();
-
-	}
+	StringWriter sw = prettyFormatJsonThing( name, thing );
 
 	System.out.print( sw.getBuffer() );
-
-	return sw.getBuffer();
+	System.out.flush();
 
     }
 
     /**
-     Pretty-print onto a {@link PrettyLineManager} anything which might appear in a {@link JSONArray} or {@link JSONObject}.
+     Pretty-format into a {@link StringWriter} anything which might appear in a {@link JSONArray} or {@link JSONObject}.
      <p/>{@link JSONArray} and {@link JSONObject} instances get the full treatment (indented lines, curly or square brackets, etc).
      {@link String} instances get encoded using {@link #enquoteForJavaString(String)}.
      Everything else gets the {@code String.valueOf( thing )} treatment.
-     <p/>See {@link #prettyPrintJsonThing(String, Object)} for an easier to use but less flexible pretty-printer.
+     <p/>This is intended to be an easy-to-use pretty printer. See {@link #prettyFormatJsonThing(int, String, Object, PrettyLineManager)}
+     for the more flexible and elaborate version (which is what does the actually pretty printing that this method is claiming credit for).
+     @param name the optional name of the thing.
+     @param thing the thing being pretty-printed.
+     @return a {@link StringWriter} containing the entire pretty-printed result.
+     <p/>If the provided Json thing is valid then the contents of the returned {@link StringBuffer} are intended
+     to be parseable by {@link #parseJsonArray(String)} or {@link #parseJsonObject(String)}.
+     Roughly speaking, the Json thing is valid if:
+     <ul>
+     <li>it is a {@link JSONArray} or a {@link JSONObject} which only contains valid things.</li>
+     <li>it is a something (like a {@link JSONArray}, a {@link JSONObject}, a string or a number)
+     which can legitimately appear within a {@link JSONArray} or a {@link JSONObject}.</li>
+     <li>if it has a name then the name is a {@link String} instance.</li>
+     </ul>
+     @throws ReallyBadNewsError if an IOException gets thrown while generating the pretty-printed lines
+     (this strikes me as impossible which is why this method doesn't throw the IOException).
+     */
+
+    public static StringWriter prettyFormatJsonThing( String name, Object thing ) {
+
+	StringWriter sw = new StringWriter();
+	try {
+
+	    PrettyLineManager plm = new PrettyLineManager( sw );
+
+	    try {
+
+		prettyFormatJsonThing( 0, name, thing, plm );
+
+	    } finally {
+
+		plm.flush();
+
+	    }
+
+	    return sw;
+
+	} catch ( IOException e ) {
+
+	    throw new ReallyBadNewsError( "WikiTreeApiUtilities.prettyPrintJsonThing:  caught an IOException writing to a StringWriter(!)", e );
+
+	}
+
+    }
+
+    /**
+     Pretty-format onto a {@link PrettyLineManager} anything which might appear in a {@link JSONArray} or {@link JSONObject}.
+     <p/>{@link JSONArray} and {@link JSONObject} instances get the full treatment (indented lines, curly or square brackets, etc).
+     {@link String} instances get encoded using {@link #enquoteForJavaString(String)}.
+     Everything else gets the {@code String.valueOf( thing )} treatment.
+     <p/>See {@link #prettyPrintJsonThing(String, Object)} or {@link #prettyFormatJsonThing(String, Object)} for an easier to use but somewhat less flexible pretty-printer or pretty-formatter.
      @param indent how deeply to indent the current thing. This is used when this method calls itself recursively to print the contents
      of {@link JSONArray} and {@link JSONObject} instances.
      Just passing {@code 0} for this parameter is almost always the right thing to do when calling it from other places.
@@ -501,7 +584,7 @@ public class MiscUtilities {
      @throws IOException if something goes wrong writing the pretty-printed lines.
      */
 
-    public static void prettyPrintJsonThing( int indent, String name, Object thing, PrettyLineManager plm )
+    public static void prettyFormatJsonThing( int indent, String name, Object thing, PrettyLineManager plm )
 	    throws IOException {
 
 	plm.append( repl( INDENT_STRING, indent ) );
@@ -515,14 +598,18 @@ public class MiscUtilities {
 
 	    plm.append( "null" ).rotate();
 
-	} else if ( thing instanceof JSONObject ) {
+	} else if ( thing instanceof Map ) {
 
-	    JSONObject jObject = (JSONObject) thing;
+	    // Covers JSONObject instances and other kinds of Java Maps.
+	    // This makes it possible to use the pretty printer to print out collections of things.
+	    // The map's keys are assumed to be something that {@link String.valueOf(Object)} is able to provide a reasonable result for.
+
+	    Map map = (Map) thing;
 
 	    plm.append( "{" ).rotate();
 
 	    boolean doComma = false;
-	    for ( Object paramName : jObject.keySet() ) {
+	    for ( Object paramName : map.keySet() ) {
 
 	        if ( doComma ) {
 
@@ -533,14 +620,14 @@ public class MiscUtilities {
 
 		if ( paramName instanceof String ) {
 
-		    prettyPrintJsonThing( indent + 1, (String) paramName, jObject.get( paramName ), plm );
+		    prettyFormatJsonThing( indent + 1, String.valueOf( paramName ), map.get( paramName ), plm );
 
-		} else {
-
-		    plm.
-			    append( repl( INDENT_STRING, indent + 1 ) ).
-			    append( "*** parameter name is not a string:  " ).
-			    append( paramName );
+//		} else {
+//
+//		    plm.
+//			    append( repl( INDENT_STRING, indent + 1 ) ).
+//			    append( "*** parameter name is not a string:  " ).
+//			    append( paramName );
 
 		}
 
@@ -548,13 +635,16 @@ public class MiscUtilities {
 
 	    plm.append( repl( INDENT_STRING, indent ) ).append( "}" ).rotate();
 
-	} else if ( thing instanceof JSONArray ) {
+	} else if ( thing instanceof Collection ) {
 
-	    JSONArray jArray = (JSONArray) thing;
+	    // Covers JSONArray instances and other kinds of Java Collections.
+	    // This makes it possible to use the pretty printer to print out collections of things.
+
+	    Collection collection = (Collection) thing;
 	    plm.append( "[" ).rotate();
 
 	    boolean doComma = false;
-	    for ( Object value : jArray ) {
+	    for ( Object value : collection ) {
 
 		if ( doComma ) {
 
@@ -563,7 +653,7 @@ public class MiscUtilities {
 		}
 		doComma = true;
 
-		prettyPrintJsonThing( indent + 1, null, value, plm );
+		prettyFormatJsonThing( indent + 1, null, value, plm );
 
 	    }
 
@@ -589,7 +679,7 @@ public class MiscUtilities {
      @throws IOException if something goes wrong while reading the content from the {@link Reader}.
      */
 
-    public static void readFromConnection( boolean server, StringBuilder sb, Reader reader )
+    public static void readFromConnection( @SuppressWarnings("SameParameterValue") boolean server, StringBuilder sb, Reader reader )
 	    throws IOException {
 
 	try {
@@ -636,7 +726,7 @@ public class MiscUtilities {
 	Object parsedObject = jp.parse( jsonArrayString.trim() );
 	final JSONArray parsedArray = (JSONArray) parsedObject;
 
-	System.out.println( "parse of array worked:  " + parsedArray );
+//	System.out.println( "parse of array worked:  " + parsedArray );
 
 	return parsedArray;
 
@@ -658,9 +748,299 @@ public class MiscUtilities {
 	Object parsedObject = jp.parse( jsonObjectString );
 	final JSONObject jsonObject = (JSONObject) parsedObject;
 
-	System.out.println( "parse of object worked:  " + jsonObject );
+//	System.out.println( "parse of object worked:  " + jsonObject );
 
 	return jsonObject;
+
+    }
+
+    /**
+     Try to turn this into an authenticated client instance if the name of a WikiTree user info file was provided to us.
+     <p/>A WikiTree user info file must satisfy all of these requirements:
+     <ul>
+     <li>the file must be a two line text file.</li>
+     <li>the file's name must end with {@code ".wtu"}.</li>
+     <li>The first line must contain an email address that is associated with a WikiTree.com account.
+     Any leading or trailing whitespace on this line is ignored.</li>
+     <li>The second line must contain the password for the WikiTree account associated with the email address on the first line.
+     Neither leading nor trailing space on this line is ignored (it isn't our job to impose password rules).</li>
+     </ul>
+     @param args the args provided when this JVM started up.
+     Put another way, a {@code String} array with one element containing the name of the {@code .wtu} file
+     that you'd like to use to login to the API. The specified name of the {@code .wtu} will will be interpreted relative to your
+     home directory. In other words, {@code .myWikiTreeAPIInfo.wtu} would be interpreted as {@code ~/.myWikiTreeAPIInfo.wtu}
+     if you're on a Unix or Mac OS X system and as {@code C:\Users\YourWindowsName} if you're on a Windows 10 system.
+     */
+
+    public static void maybeLoginToWikiTree( WikiTreeApiClient apiClient, String[] args ) {
+
+	if ( args.length == 0 ) {
+
+	    System.out.println( "no user info file specified on command line, proceeding as an anonymous user" );
+
+	} else if ( args.length == 1 ) {
+
+	    String userHome = System.getProperty( "user.home" );
+	    String userInfoFileName;
+	    if ( userHome == null ) {
+
+		userInfoFileName = args[ 0 ];
+
+	    } else {
+
+		userInfoFileName = userHome + File.separator + args[ 0 ];
+
+	    }
+
+	    if ( !userInfoFileName.endsWith( ".wtu" ) ) {
+
+		System.err.println( "WikiTree user info file specified on the command line does not have a \".wtu\" suffix - bailing out" );
+
+		System.exit( 1 );
+	    }
+
+	    System.out.println( "using WikiTree user info file at " + userInfoFileName );
+
+	    try {
+
+		LineNumberReader lnr = new LineNumberReader( new FileReader( userInfoFileName ) );
+
+		String userName = lnr.readLine();
+		if ( userName == null ) {
+
+		    System.out.flush();
+		    System.err.println( "user info file \"" + userInfoFileName + "\" is empty" );
+		    System.exit( 1 );
+
+		}
+		userName = userName.trim();
+
+		String password = lnr.readLine();
+		if ( password == null ) {
+
+		    System.out.flush();
+		    System.err.println( "user info file \"" + userInfoFileName + "\" only has one line (first line must be an email address; second line must be WikiTree password for that email address)" );
+		    System.exit( 1 );
+
+		}
+
+		boolean loginResponse = apiClient.login( userName, password );
+		if ( !loginResponse ) {
+
+		    System.out.flush();
+		    System.err.println( "unable to create authenticated session for \"" + userName + "\" (probably incorrect user name or incorrect password; could be network problems or maybe even an invasion of space aliens)" );
+		    System.err.flush();
+		    System.out.println( "first line of " + userInfoFileName + " must contain the email address that you use to login to WikiTree" );
+		    System.out.println( "second line of " + userInfoFileName + " must contain the WikiTree password for that email address" );
+		    System.out.println( "leading or trailing whitespace on the email line is ignored" );
+		    System.out.println( "IMPORTANT:  leading or trailing whitespace on the password line is NOT ignored" );
+		    System.out.flush();
+		    System.exit( 1 );
+
+		}
+
+	    } catch ( FileNotFoundException e ) {
+
+		System.out.flush();
+		System.err.println( "unable to open user info file - " + e.getMessage() );
+		System.exit( 1 );
+
+	    } catch ( ParseException e ) {
+
+		System.out.flush();
+		System.err.println( "unable to parse response from server (probably a bug; notify danny@matilda.com)" );
+		e.printStackTrace();
+		System.exit( 1 );
+
+	    } catch ( IOException e ) {
+
+		System.out.flush();
+		System.err.println( "something went wrong in i/o land" );
+		e.printStackTrace();
+		System.exit( 1 );
+
+	    }
+
+	} else {
+
+	    System.err.println( "you must specify either no parameter or one parameter" );
+	    System.exit( 1 );
+
+	}
+
+    }
+
+    public static void printAuthenticatedSessionUserInfo( WikiTreeApiClient apiClient ) {
+
+        if ( apiClient.isAuthenticated() ) {
+
+	    System.out.println( "authenticated WikiTree API session for " + apiClient.getAuthenticatedUserEmailAddress() + " (" +
+				apiClient.getAuthenticatedWikiTreeId() + ")" );
+
+	} else {
+
+            System.out.println( "WikiTree API session is not authenticated" );
+
+	}
+
+    }
+
+    @Nullable
+    public static Object getOptionalJsonValue( @Nullable Class requiredClass, JSONObject jsonObject, String ... keys ) {
+
+	Object rval = getJsonValue( false, jsonObject, keys );
+
+	if ( rval == null ) {
+
+	    return null;
+
+	}
+
+	if ( requiredClass != null ) {
+
+	    //noinspection unchecked
+	    if ( requiredClass.isAssignableFrom( rval.getClass() ) ) {
+
+		return rval;
+
+	    } else {
+
+		throw new IllegalArgumentException(
+			"WikiTreeApiUtilities.getOptionalJsonValue:  value at " + formatPath( keys ) +
+			" should be a " + requiredClass.getCanonicalName() + " but it is a " + rval.getClass().getCanonicalName()
+		);
+
+	    }
+
+	}
+
+	return rval;
+
+    }
+
+    /**
+     Get a value which must exist.
+     @param requiredClass if specified, the class that the requested value must be assignable to; otherwise, the value may be of any class.
+     @param jsonObject where to look for the value.
+     @param keys the path to the value.
+     @return the value.
+     @throws IllegalArgumentException if the value does not exist or if a required class was specified and the value is not assignable to.
+     */
+
+    @NotNull
+    public static Object getMandatoryJsonValue( @Nullable Class requiredClass, @NotNull JSONObject jsonObject, String ... keys ) {
+
+	Object rval = getJsonValue( true, jsonObject, keys );
+	if ( rval == null ) {
+
+	    throw new IllegalArgumentException(
+	    	"WikiTreeApiUtilities.getMandatoryJsonValue:  required value at " + formatPath( keys ) + " is null"
+	    );
+
+	}
+
+	if ( requiredClass != null ) {
+
+	    //noinspection unchecked
+	    if ( requiredClass.isAssignableFrom( rval.getClass() ) ) {
+
+		return rval;
+
+	    } else {
+
+	        throw new IllegalArgumentException(
+	        	"WikiTreeApiUtilities.getMandatoryJsonValue:  value at " + formatPath( keys ) +
+			" should be a " + requiredClass.getCanonicalName() + " but it is a " + rval.getClass().getCanonicalName()
+		);
+
+	    }
+
+	}
+
+	return rval;
+
+    }
+
+    public static Object getMandatoryJsonValue( JSONObject jsonObject, String ... keys ) {
+
+	Object rval = getJsonValue( true, jsonObject, keys );
+
+	return rval;
+
+    }
+
+    public static String formatPath( String[] keys ) {
+
+        StringBuilder sb = new StringBuilder();
+        String pointer = "";
+        for ( String key : keys ) {
+
+            sb.append( pointer ).append( '"' ).append( key ).append( '"' );
+            pointer = " -> ";
+
+	}
+
+	return sb.toString();
+
+    }
+
+    public static Object getJsonValue( boolean verifyStructure, JSONObject xJsonObject, String... keys ) {
+
+        int depth = 1;
+        JSONObject jsonObject = xJsonObject;
+	Object value = null;
+	StringBuffer sb = new StringBuffer();
+	String pointer = "";
+	for ( String key : keys ) {
+
+	    sb.append( pointer ).append( '"' ).append( key ).append( '"' );
+	    pointer = " -> ";
+
+	    value = jsonObject.get( key );
+	    if ( depth == keys.length ) {
+
+		break;
+
+	    }
+
+	    if ( value instanceof JSONObject ) {
+
+	        jsonObject = (JSONObject)value;
+
+	    } else if ( value == null ) {
+
+		if ( verifyStructure ) {
+
+		    throw new IllegalArgumentException( "WikiTreeApiUtilities.getOptionalJsonValue:  found null at " + sb );
+
+		} else {
+
+		    break;
+
+		}
+
+	    } else {
+
+	        if ( verifyStructure ) {
+
+		    throw new IllegalArgumentException(
+		    	"WikiTreeApiUtilities.getJsonValue:  expected JSONObject but found something else at " + sb +
+			":  (" + value.getClass().getCanonicalName() + ") " + value
+		    );
+
+		} else {
+
+	            break;
+
+		}
+
+	    }
+
+	    depth += 1;
+
+	}
+
+	return value;
 
     }
 

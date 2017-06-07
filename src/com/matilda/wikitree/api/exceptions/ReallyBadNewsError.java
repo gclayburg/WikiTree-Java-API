@@ -1,16 +1,16 @@
 /*
- Copyright © 2014-2017 Daniel Boulet
+ * Copyright © 2017 Daniel Boulet
  */
 
-package xyz.kenosee.wikitree.api.exceptions;
+package com.matilda.wikitree.api.exceptions;
 
 import org.jetbrains.annotations.Nullable;
 
 /**
  * Thrown if something truly unexpected happens.
  * <p/>If you get one of these then you are almost certainly the 'proud' discoverer of a software defect in this facility.
- * Please notify danny@matilda.com (provide, at a minimum, the entire error message including the stack traceback that was
- * thrown towards you when the "really bad news" happened.
+ * Please notify danny@matilda.com (please provide, at a minimum, the entire error message including the stack traceback that was
+ * thrown towards you when the "really bad news" happened).
  */
 
 public class ReallyBadNewsError
@@ -42,6 +42,7 @@ public class ReallyBadNewsError
 
     }
 
+    @SuppressWarnings("unused")
     public ReallyBadNewsError() {
 	super();
 
@@ -56,6 +57,7 @@ public class ReallyBadNewsError
 
     }
 
+    @SuppressWarnings("unused")
     public ReallyBadNewsError( String msg, Throwable e ) {
 	super(msg, e);
 

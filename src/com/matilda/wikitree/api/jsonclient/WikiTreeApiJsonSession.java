@@ -1,11 +1,17 @@
-package xyz.kenosee.wikitree.api;
+/*
+ * Copyright © 2017 Daniel Boulet
+ */
 
+package com.matilda.wikitree.api.jsonclient;
+
+import com.matilda.wikitree.api.WikiTreeApiClient;
+import com.matilda.wikitree.api.exceptions.ReallyBadNewsError;
+import com.matilda.wikitree.api.util.WikiTreeApiUtilities;
 import com.sun.corba.se.spi.monitoring.StatisticsAccumulator;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.json.simple.parser.*;
 import org.json.simple.*;
-import xyz.kenosee.wikitree.api.exceptions.ReallyBadNewsError;
-import xyz.kenosee.wikitree.api.util.MiscUtilities;
 
 import java.io.*;
 import java.net.*;
@@ -14,27 +20,25 @@ import java.util.Date;
 import java.util.Vector;
 
 /**
- A Java implementation of the WikiTree API.
+ A purely(?) JSON-based Java implementation of the WikiTree API.
  <p/>See <a href="https://www.wikitree.com/wiki/Help:API_Documentation">https://www.wikitree.com/wiki/Help:API_Documentation</a>
  for more information about the original WikiTree API (intended for use within web pages).
  */
 
 @SuppressWarnings({ "WeakerAccess", "unused", "SameParameterValue" })
-public class WikiTreeApiClient {
+public class WikiTreeApiJsonSession implements WikiTreeApiClient {
 
     /**
      The default base URL used to access the WikiTree API server.
      <p/>This URL will be augmented with appropriate query parameters for each request.
      For example, a {@code getPerson} request for Winston S. Churchill would use the following URL to make the request to the default WikiTree API server:
      <blockquote>{@code https://apps.wikitree.com/api.php?format=json&action=getPerson&fields=*&key=Churchill-4}</blockquote>
-     <p/>See {@link #WikiTreeApiClient(String)} if you want to use a different URL.
+     <p/>See {@link #WikiTreeApiJsonSession(String)} if you want to use a different URL.
      */
 
     public static final String DEFAULT_BASE_SERVER_URL_STRING = "https://apps.wikitree.com/api.php";
 
     private static final StatisticsAccumulator s_innerRequestStats = new StatisticsAccumulator( "ms" );
-
-    private static boolean s_usingGet = false;
 
     private static int _miniServerPort;
 
@@ -44,6 +48,14 @@ public class WikiTreeApiClient {
 
     private Vector<String> _loginCookies;
 
+    private String _authenticatedUserEmailAddress;
+
+    private String _authenticatedWikiTreeId;
+
+    private String _loginResultStatus;
+
+    private static boolean s_showUrls = false;
+
     /**
      Create a reusable anonymous WikiTree API client instance which sends its requests to the production WikiTree API server.
      <p/>Requests made via an anonymous client instance are only able to access WikiTree information which is publicly available.
@@ -52,20 +64,46 @@ public class WikiTreeApiClient {
      <p/>See {@link #login(String, String)} for more information.
      */
 
-    public WikiTreeApiClient() {
+    public WikiTreeApiJsonSession() {
         this( null );
+
+    }
+
+    /**
+     Specify whether or not the actual URLs used to connect to the WikiTree API server should be printed on System.out.
+     <p/>This is intended for debuggin' purposes. In order to provide better password security, URLs for login requests are never printed.
+     @param showUrls {@code true} if URLs should be printed on System.out; {@code false} if not.
+     */
+
+    public static void setShowUrls( boolean showUrls ) {
+
+        s_showUrls = showUrls;
 
     }
 
     /**
      Create a reusable anonymous WikiTree API client instance which sends its requests to a specified WikiTree API server.
      @param baseServerUrlString the URL of the specified WikiTree API server.
-     <p/>See {@link #WikiTreeApiClient()} for more information about anonymous vs authenticated WikiTree API client instances.
+     <p/>See {@link #WikiTreeApiJsonSession()} for more information about anonymous vs authenticated WikiTree API client instances.
      */
 
-    public WikiTreeApiClient( String baseServerUrlString ) {
+    public WikiTreeApiJsonSession( String baseServerUrlString ) {
 
         _baseServerUrlString = baseServerUrlString == null ? DEFAULT_BASE_SERVER_URL_STRING : baseServerUrlString;
+
+    }
+
+    /**
+     Determine if this session is using the default base server URL string.
+     <p/>Assuming that the variable {@code instance} is an instance of this class, this method is exactly equivalent to
+     <blockquote>{@code WikiTreeApiJsonSession.DEFAULT_BASE_SERVER_URL_STRING.equals( instance.getBaseServerUrlString() )}</blockquote>
+     <p/>See {@link #DEFAULT_BASE_SERVER_URL_STRING}, {@link #getBaseServerUrlString()} and {@link #WikiTreeApiJsonSession(String)} for more information.
+     @return {@code true} if this instance's base server URL string is, ignoring differences in upper vs lower case, textually equal to the value of {@link #DEFAULT_BASE_SERVER_URL_STRING}; {@code false} otherwise.
+     */
+
+    public boolean isDefaultBaseServer() {
+
+        return DEFAULT_BASE_SERVER_URL_STRING.equals( getBaseServerUrlString() );
 
     }
 
@@ -74,6 +112,7 @@ public class WikiTreeApiClient {
      @return the base URL that this instance will augment when processing API requests.
      */
 
+    @Override
     public String getBaseServerUrlString() {
 
         return _baseServerUrlString;
@@ -81,52 +120,101 @@ public class WikiTreeApiClient {
     }
 
     /**
-     Determine whether this instance will use http GET style queries or http POST style queries to service API requests.
-     <p/>The current implementation of this API only supports the use of http GET style queries. Consequently, this method always
-     returns {@code true}.
-     <p/>Some future version of this software <b><u>MIGHT</u></b> provide the option to use http POST style queries.
-     It should be noted that the likelihood that some future version of this software will actually support http POST style queries
-     is really quite unlikely.
-     It should also be noted that while there is some code within this class which purports to support http POST style queries, it is
-     at best very preliminary and very unlikely to actually work properly.
-     @return The current implementation of this method always returns {@code true} indicating that requests will be implemented using
-     http GET style queries.
+     Get the most recent login attempt's result status.
+     @return {@code "Success"} if the most recent attempt works. Other return values are possible including
+     {@code "Illegal"} if the supplied email address does not correspond to a valid WikiTree user account or
+     {@code "WrongPass"} if the supplied password is incorrect. Other return values are possible (sorry).
+     The return value will be {@code null} if this method is called before
+     an attempt to login via this instance has occurred.
      */
 
-    public static boolean usingGet() {
+    @Override
+    public String getLoginResultStatus() {
 
-        return s_usingGet;
+        return _loginResultStatus;
+
+    }
+
+    /**
+     Determine if this instance is authenticated.
+     <p/>An instance is considered to be authenticated if any WikiTree API requests that are made via said instance are made with
+     the login credentials of a WikiTree user.
+     This in turn implies that at least one call to one of this class's {@code login} methods has occurred and that the last such call succeeded.
+     @return {@code true} if this instance is authenticated; {@code false} otherwise.
+     <p/>See either {@link #login(String, String)} for more information.
+     */
+
+    @Override
+    public boolean isAuthenticated() {
+
+        return _loginCookies != null;
+
+    }
+
+    /**
+     Get the email address of the WikiTree user for whom this session is authenticated.
+     @return the email address of the user for whom this session is authenticated; {@code null} if this session is not authenticated.
+     <p/>See {@link #isAuthenticated()} or {@link #login(String, String)} for more information.
+     */
+
+    @Override
+    public String getAuthenticatedUserEmailAddress() {
+
+	return _authenticatedUserEmailAddress;
+
+    }
+
+    /**
+     Get the WikiTree ID of the user for whom this session is authenticated.
+     @return the WikiTree ID of the user for whom this session is authenticated; {@code null} if this session is not authenticated.
+     <p/>See {@link #isAuthenticated()} or {@link #login(String, String)} for more information.
+     */
+
+    @Override
+    public String getAuthenticatedWikiTreeId() {
+
+	return _authenticatedWikiTreeId;
 
     }
 
     /**
      Login to the WikiTree API server.
-     <p/>This method sends a 'login' request to this instance's WikiTree API server.
-     If successful, this instance becomes an authenticated WikiTree API client instance with respect to this instance's WikiTree API server.
-     If unsuccessful, this instance either remains or becomes an anonymous WikiTree API client instance with respect to this instance's WikiTree API server.
-     <p/>See {@link #WikiTreeApiClient()} for more information about anonymous vs authenticated WikiTree API client instances.
-     <p/>See {@link #WikiTreeApiClient(String)} for more info on using alternative WikiTree API servers.
-     @param emailAddress the email address associated with a www.wikitree.com account.
-     @param password the password associated with the same www.wikitree.com account.
-     @return {@code true} if the login request succeeded (valid www.wikitree.com account email address and associated password and no "technical difficulties"
-     between here and the WikiTree API server.
-     <p/>Note that if this method returns false then this instance is now an anonymous WikiTree API client instance regardless of whether or not it was an
-     authenticated WikiTree API client instance before it called this method.
-     @throws IOException if an IOException is thrown by the networking facilities used to send and receive the login request.
-     @throws ParseException if this client is unable to process the response from the WikiTree API server. Seeing this exception should be a rather rare occurrence.
-     If you do see one, you have probably encountered a bug in this software. Please notify danny@matilda.com if you get this exception (be prepared to work with Danny
-     to reproduce the problem).
+     <p/>See {@link WikiTreeApiClient#login(String,String)} for more info.
      */
 
+    @SuppressWarnings("unchecked")
+    @Override
     public boolean login( @NotNull String emailAddress, @NotNull String password )
 	    throws IOException, ParseException {
 
-	@SuppressWarnings("UnnecessaryLocalVariable")
-	JSONObject rval = login( emailAddress, password, "*" );
+	JSONObject requestParams = new JSONObject();
+	requestParams.put( "action", "login" );
+	requestParams.put( "email", emailAddress );
+	requestParams.put( "password", password );
+	requestParams.put( "fields", "*" );
+	requestParams.put( "format", "json" );
+
+	JSONObject resultObject = makeRequest( requestParams );
+
+	/*
+	 Figure out if the login worked.
+	 */
+
+	boolean worked = analyzeLoginResult( emailAddress, resultObject );
+
+	// Paranoia rules supreme!
+
+	if ( !worked || _loginCookies == null ) {
+
+	    _authenticatedWikiTreeId = null;
+	    _authenticatedUserEmailAddress = null;
+	    _loginCookies = null;
+
+	}
 
 	/*
 	Note that a successful login request results in the server sending us http cookies which must be provided on all future
-	calls to the server via this instance. These cookies must be grabbed by on of the rather low level routines that this method
+	calls to the server via this instance. These cookies are grabbed by one of the rather low level routines that this method
 	calls (quite indirectly). Consequently, the only sure way to determine if this call actually worked is to check if this instance has
 	references to these login cookies. This check must be done just before this method returns. Consequently, we do it here.
 	 */
@@ -136,53 +224,161 @@ public class WikiTreeApiClient {
     }
 
     /**
-     A version of {@link #login(String, String)} which is not intended to be used by those responsible for creating and maintaining this API.
-     It is probably best to avoid this method.
-     @param emailAddress the email address associated with a www.wikitree.com account.
-     @param password the password associated with the same www.wikitree.com account.
-     @param fields a list of the fields that should be returned by the server for this request.
-     Note that a login request which is successful on the server may fail on the client if the certain fields are not returned by the server
-     (did I mention that it is probably best to avoid this method?).
-     @return the JSONObject returned by the server in response to this request.
-     @throws IOException if an IOException is thrown by the networking facilities used to send and receive the login request.
-     @throws ParseException if this client is unable to process the response from the WikiTree API server. Seeing this exception should be a rather rare occurrence.
-     If you do see one, you have probably encountered a bug in this software. Please notify danny@matilda.com if you get this exception (be prepared to work with Danny
-     to reproduce the problem).
+     Analyze the result of a login attempt.
+     <p/>This method also erases any authentication information left by a previous successful login attempt and records
+     equivalent authentication information if this login attempt is deemed to have worked.
+     @param emailAddress the email address used to identify the WikiTree user requesting the login.
+     @param resultObject the value returned by the login request to the WikiTree API server.
+     @return {@code true} if the login worked; {@code false} otherwise.
      */
 
-    @SuppressWarnings("unchecked")
-    public JSONObject login( @NotNull String emailAddress, @NotNull String password, @NotNull String fields )
-	    throws IOException, ParseException {
+    private boolean analyzeLoginResult( @NotNull String emailAddress, JSONObject resultObject ) {
 
-	JSONObject requestParams = new JSONObject();
-	requestParams.put( "action", "login" );
-	requestParams.put( "email", emailAddress );
-	requestParams.put( "password", password );
-	requestParams.put( "fields", fields );
-	requestParams.put( "format", "json" );
+        // Start off by assuming that the login attempt failed.
 
-	JSONObject resultObject = makeRequest( requestParams );
+        _authenticatedWikiTreeId = null;
+        _authenticatedUserEmailAddress = null;
+        _loginResultStatus = null;
 
-	/*
-	 Figure out what species of fish we got back.
-	 Note that unlike most if not all of the other API calls, this call gets a JSONObject back from the server.
-	 */
+        // Did we back the auxiliary information that we should have gotten back from a login attempt?
+
+	// First, we need to make sure that we got at least a JSON result object back.
 
 	if ( resultObject == null ) {
 
-	    return null;	// No such fish.
+	    // It cannot possibly have worked completely if we didn't get a JSON result object back.
+	    // If we did get login cookies back then the screw up is in the logic on our end or we don't understand the protocol
+	    // (which also means that the screwup is in the logic on our end).
+
+	    if ( _loginCookies != null ) {
+
+		throw new ReallyBadNewsError( "WikiTreeApiJsonSession.login:  did not get a result object even though we got login cookies" );
+
+	    }
 
 	} else {
 
-	    return (JSONObject)resultObject;
+	    // We got a result object back. Let's see what's inside.
+
+	    // Does it contain a "login" object?
+
+	    Object actualResultObj = resultObject.get( "login" );
+	    if ( actualResultObj instanceof JSONObject ) {
+
+	        // We got a "login" object. Does it contain a "result" string?
+
+		JSONObject actualResult = (JSONObject) actualResultObj;
+		Object resultStatus = actualResult.get( "result" );
+		if ( resultStatus instanceof String ) {
+
+		    _loginResultStatus = (String)resultStatus;
+
+		    // Is the result string equal to "Success"?
+
+		    if ( "Success".equals( _loginResultStatus ) ) {
+
+		        // The login seems to have completely worked.
+			// Let's extract user's WikiTree ID and remember the email address used to do this authentication.
+
+			Object wikiTreeIdObj = actualResult.get( "username" );
+			if ( wikiTreeIdObj instanceof String ) {
+
+			    _authenticatedWikiTreeId = (String) wikiTreeIdObj;
+			    _authenticatedUserEmailAddress = emailAddress;
+
+			} else if ( wikiTreeIdObj == null ) {
+
+			    throw new ReallyBadNewsError(
+				    "JSonWikiTreeApiClient.login:  request result's \"login\" object does not contain a \"username\" entity"
+			    );
+
+			} else {
+
+			    throw new ReallyBadNewsError(
+				    "JSonWikiTreeApiClient.login:  request result's \"login\" object's \"username\" entity is not a string " +
+				    "(it is a " + wikiTreeIdObj.getClass().getCanonicalName() + ")"
+			    );
+
+			}
+
+		    }
+
+		} else if ( resultStatus == null ) {
+
+		    throw new ReallyBadNewsError(
+			    "JSonWikiTreeApiClient.login:  request result's \"login\" object does not contain a \"result\" entity"
+		    );
+
+		} else {
+
+		    // The "result" entity is not a string.
+
+		    throw new ReallyBadNewsError(
+			    "JSonWikiTreeApiClient.login:  request result's \"login\" object's \"result\" entity " +
+			    "is not a string " +
+			    "(it is a " + resultStatus.getClass().getCanonicalName() + ")"
+		    );
+
+		}
+
+	    } else if ( actualResultObj == null ) {
+
+		throw new ReallyBadNewsError( "JSonWikiTreeApiClient.login:  request result does not contain a \"login\" entity" );
+
+	    } else {
+
+		throw new ReallyBadNewsError(
+			"JSonWikiTreeApiClient.login:  request result's \"login\" entity is not a JSON object " +
+			"(it is a " + actualResultObj.getClass().getCanonicalName() + ")"
+		);
+
+	    }
 
 	}
+
+	// If the login worked then the authenticated WikiTree ID, the authenticated user email address and the login cookies must not be null.
+	// If the login failed then all three must be null.
+	// Let's make sure that that is what happened.
+
+	boolean wtiNull = _authenticatedWikiTreeId == null;
+	boolean aueaNull = _authenticatedUserEmailAddress == null;
+	boolean lcNull = _loginCookies == null;
+
+	// Are some but not all of them null?
+
+	if ( wtiNull != aueaNull || aueaNull != lcNull ) {
+
+	    // Delete the login cookies if the above analysis screwed up.
+	    // This may seem a bit brutal but the alternative is to end up with an authenticated session
+	    // which we don't know who it is authenticated for.
+
+	    Vector<String> loginCookies = _loginCookies;
+	    _loginCookies = null;
+
+	    throw new ReallyBadNewsError( "JSonWikiTreeApiClient.login:  supposedly " +
+					  ( lcNull ? "failed" : "successful" ) + " login request " +
+					  "did not yield " + ( lcNull ? "null" : "non-null" ) + " values for all of " +
+					  "authenticated WikiTree ID (got " + _authenticatedWikiTreeId + "), " +
+					  "authenticated User Email Address (got " + _authenticatedUserEmailAddress + "), and " +
+					  "login cookies (got " +
+					  (
+						  loginCookies == null
+							  ?
+							  "null"
+							  :
+							  loginCookies.size() + " cookie" + ( loginCookies.size() == 1 ? "" : "s" )
+					  ) + ")"
+	    );
+
+	}
+
+	return _loginCookies != null;
 
     }
 
     /**
      Request information about a specified person (someone with a WikiTree profile).
-     @param key the specified person's WikiTree id or Person.Id.
+     @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request information about Winston S. Churchill (UK Prime Minister during the Second World War).
      @return A JSONObject containing the profile information for the specified person, their parents, their siblings, and their children.
@@ -204,7 +400,7 @@ public class WikiTreeApiClient {
 
     /**
      Request information about a specified person (someone with a WikiTree profile).
-     @param key the specified person's WikiTree id or Person.Id.
+     @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request information about Winston S. Churchill (UK Prime Minister during the Second World War).
      @param fields a comma separated list of the fields that you want returned. Specifying {@code "*"} will get you all the available fields.
@@ -239,7 +435,7 @@ public class WikiTreeApiClient {
 
     }
 
-    private Object interpretIdParameter( String who, @NotNull String key ) {
+    public static Object interpretIdParameter( String who, @NotNull String key ) {
 
         if ( key.length() == 0 ) {
 
@@ -305,7 +501,7 @@ public class WikiTreeApiClient {
 
     /**
      Request the biography for a specified person (someone with a WikiTree profile).
-     @param key the specified person's WikiTree id or Person.Id.
+     @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request the biography section of Winston S. Churchill's profile.
      @return A JSONObject containing the specified person's biography.
@@ -445,7 +641,7 @@ public class WikiTreeApiClient {
 
     /**
      Request the ancestors of a specified person (someone with a WikiTree profile).
-     @param key the specified person's WikiTree id or Person.Id.
+     @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request the biography section of Winston S. Churchill's profile.
      @param depth how many generations back to retrieve. if {@code null} then a depth of 5 is used. Valid values are 1-10.
@@ -457,7 +653,7 @@ public class WikiTreeApiClient {
      */
 
     @SuppressWarnings("unchecked")
-    public JSONObject getAncestors( String key, Integer depth )
+    public JSONObject getAncestors( @NotNull String key, @Nullable Integer depth )
 	    throws IOException, ParseException {
 
 	JSONObject requestParams = new JSONObject();
@@ -488,7 +684,7 @@ public class WikiTreeApiClient {
 
     /**
      Request the immediate relatives of a specified person (someone with a WikiTree profile).
-     @param keys a comma separated list of WikiTree id or Person.Id values for the profiles to return relatives for.
+     @param keys a comma separated list of WikiTree ID or Person.Id values for the profiles to return relatives for.
      Elements of the list will be treated as a Person.Id if they can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specifying {@code "5589,Hozier-1"} would return the relatives of Sir Winston S. Churchill (Person.Id 5589) and his wife Baroness Clementine Churchill (Hozier-1).
      @param getParents {@code true} returns parents of the specified profiles.
@@ -529,20 +725,20 @@ public class WikiTreeApiClient {
 
     }
 
-    public JSONObject makeRequest( JSONObject requestObject )
+    private JSONObject makeRequest( JSONObject requestObject )
 	    throws IOException, ParseException {
 
-	System.out.println( "... starting @ " + MiscUtilities.formatStandardMs( new Date() ) );
+//	System.out.println( "... starting @ " + WikiTreeApiUtilities.formatStandardMs( new Date() ) );
         long startTime = System.currentTimeMillis();
-        JSONObject rval = s_usingGet ? requestViaJsonPost( requestObject ) : requestViaHttpGet( requestObject );
+        JSONObject rval = requestViaHttpGet( requestObject );
         long endTime = System.currentTimeMillis();
-	System.out.println( "... done @ " + MiscUtilities.formatStandardMs( new Date() ) );
+//	System.out.println( "... done @ " + WikiTreeApiUtilities.formatStandardMs( new Date() ) );
 
 	synchronized ( s_innerRequestStats ) {
 
 	    double delta = ( endTime - startTime ) / 1000.0;
 	    s_innerRequestStats.sample( delta );
-	    System.out.println( "delta = " + delta );
+//	    System.out.println( "delta = " + delta );
 
 	}
 
@@ -558,63 +754,69 @@ public class WikiTreeApiClient {
         String what = "formatting request URL";
 
 	StringBuffer requestSb = new StringBuffer( _baseServerUrlString );
-	MiscUtilities.formatRequestAsUrlQueryParameters( who, requestObject, requestSb );
+	WikiTreeApiUtilities.formatRequestAsUrlQueryParameters( who, requestObject, requestSb );
 
-        String actualUrlString = requestSb.toString();
+	String actualUrlString = requestSb.toString();
 
-        if ( actualUrlString.contains( "action=login" ) ) {
+	try {
 
-            System.out.println( "not showing URL for login request (protects the password)" );
+	    if ( s_showUrls ) {
 
-	} else {
+		if ( actualUrlString.contains( "action=login" ) ) {
 
-	    System.out.println( "URL will be " + actualUrlString );
+		    System.out.println( "not showing URL for login request (protects the password)" );
 
-	}
+		} else {
 
-	URL actualUrl = new URL( actualUrlString );
+		    System.out.println( "URL will be " + actualUrlString );
 
-	what = "initializing connection";
-
-	URLConnection urlConnection = actualUrl.openConnection();
-	HttpURLConnection connection = (HttpURLConnection)urlConnection;
-	connection.setDoOutput( false );
-	connection.setDoInput( true );
-	connection.setRequestProperty( "Accept", "application/json" );
-	if ( !"login".equals( requestObject.get( "action" ) ) && _loginCookies != null ) {
-
-	    System.out.println( "it's not a login attempt and we have cookies" );
-
-	    StringBuilder sb = new StringBuilder();
-	    String semiColon = "";
-	    for ( String cookie : _loginCookies ) {
-
-	        sb.append( semiColon ).append( cookie.split(";", 2)[0] );
-	        semiColon = "; ";
+		}
 
 	    }
 
-	    connection.addRequestProperty( "Cookie", sb.toString() );
+	    URL actualUrl = new URL( actualUrlString );
 
-	    System.out.println( "done adding in cookies" );
+	    what = "initializing connection";
 
-	}
+	    URLConnection urlConnection = actualUrl.openConnection();
+	    HttpURLConnection connection = (HttpURLConnection)urlConnection;
+	    connection.setDoOutput( false );
+	    connection.setDoInput( true );
+	    connection.setRequestProperty( "Accept", "application/json" );
+	    if ( !"login".equals( requestObject.get( "action" ) ) && _loginCookies != null ) {
 
-	connection.setRequestMethod( "GET" );
+//		System.out.println( "it's not a login attempt and we have cookies" );
 
-	what = "getting response";
+		StringBuilder sb = new StringBuilder();
+		String semiColon = "";
+		for ( String cookie : _loginCookies ) {
 
-	Object rval = MiscUtilities.readResponse( connection, true );
+		    sb.append( semiColon ).append( cookie.split(";", 2)[0] );
+		    semiColon = "; ";
 
-	if ( "login".equals( requestObject.get( "action" ) ) ) {
+		}
 
-	    System.out.println( "It's a login attempt" );
+		connection.addRequestProperty( "Cookie", sb.toString() );
 
-	    // Throw away the old cookies regardless of whether or not the login request worked.
+//		System.out.println( "done adding in cookies" );
 
-	    _loginCookies = null;
+	    }
 
-	    try {
+	    connection.setRequestMethod( "GET" );
+
+	    what = "getting response";
+
+	    Object rval = WikiTreeApiUtilities.readResponse( connection, true );
+
+	    if ( "login".equals( requestObject.get( "action" ) ) ) {
+
+		what = "It's a login attempt";
+
+		// Throw away the old cookies regardless of whether or not the login request worked.
+
+		_loginCookies = null;
+		_authenticatedUserEmailAddress = null;
+		_authenticatedWikiTreeId = null;
 
 		JSONObject rvalAsJsonObject = (JSONObject) rval;
 		if ( rvalAsJsonObject == null ) {
@@ -633,20 +835,20 @@ public class WikiTreeApiClient {
 			String resultString = (String)loginObject.get( "result" );
 			if ( "Success".equals( resultString ) ) {
 
-			    System.out.println( "login worked!" );
+//			    System.out.println( "login worked!" );
 
 			    Collection<String> cookies = connection.getHeaderFields().get( "Set-Cookie" );
 			    if ( cookies != null ) {
 
-				_loginCookies = new Vector<String>( cookies );
+				_loginCookies = new Vector<>( cookies );
 
-				for ( String cookie : _loginCookies ) {
-
-				    System.out.println( "cookie:  " + MiscUtilities.enquoteForJavaString( cookie ) );
-
-				}
-
-				System.out.println( "done printing cookies" );
+//				for ( String cookie : _loginCookies ) {
+//
+//				    System.out.println( "cookie:  " + WikiTreeApiUtilities.enquoteForJavaString( cookie ) );
+//
+//				}
+//
+//				System.out.println( "done printing cookies" );
 
 			    }
 
@@ -656,27 +858,28 @@ public class WikiTreeApiClient {
 
 		}
 
-	    } catch ( RuntimeException e ) {
+	    }
 
-	        System.err.println( "unable to tear apart login rval:  " + rval );
+	    if ( rval == null || rval instanceof JSONObject ) {
 
-		e.printStackTrace();
+		return (JSONObject)rval;
 
-		throw e;
+	    } else {
+
+		throw new ReallyBadNewsError( "requestViaJsonGet:  expected a JSONObject, got this instead:  " + rval );
 
 	    }
 
-	}
+	} catch ( RuntimeException e ) {
 
-	if ( rval == null || rval instanceof JSONObject ) {
+	    System.err.println( "unable to issue GET with \"" + requestSb + "\" (doing " + what + "):  " + what );
 
-	    return (JSONObject)rval;
+	    e.printStackTrace();
 
-	} else {
-
-	    throw new ReallyBadNewsError( "requestViaJsonGet:  expected a JSONObject, got this instead:  " + rval );
+	    throw e;
 
 	}
+
     }
 
     private JSONObject requestViaJsonPost( JSONObject requestObject )
@@ -684,216 +887,63 @@ public class WikiTreeApiClient {
 
         String requestString = JSONObject.toJSONString( requestObject );
 
-        String what = null;
-
-	what = "initializing connection";
-
-	URL serverUrl = new URL( _baseServerUrlString );
-
-	URLConnection urlConnection = serverUrl.openConnection();
-	HttpURLConnection connection = (HttpURLConnection)urlConnection;
-	connection.setDoOutput( true );
-	connection.setDoInput( true );
-	connection.setRequestProperty( "Content-Type", "application/json; charset=UTF-8" );
-	connection.setRequestProperty( "Accept", "application/json" );
-	connection.setRequestMethod( "POST" );
-
-	what = "posting request";
-
-	OutputStream writer = connection.getOutputStream();
-	try {
-
-	    writer.write( ( requestString + '\n' ).getBytes( "UTF-8" ) );
-	    writer.flush();
-
-	} finally {
-
-	    writer.close();
-	    System.out.println( "writer closed" );
-
-	}
-
-	what = "getting response";
-
-	@SuppressWarnings("UnnecessaryLocalVariable")
-	Object rval = MiscUtilities.readResponse( connection, true );
-
-	if ( rval == null || rval instanceof JSONObject ) {
-
-	    return (JSONObject)rval;
-
-	} else {
-
-	    throw new ReallyBadNewsError( "requestViaJsonPost:  expected a JSONObject, got this instead:  " + rval );
-
-	}
-
-    }
-
-    private static void doit( String what, Object result )
-	    throws IOException {
-
-        MiscUtilities.prettyPrintJsonThing( what, result );
-
-    }
-
-    public static void main( String[] args ) {
-
-	WikiTreeApiClient request = new WikiTreeApiClient();
-
-	request.maybeLoginToWikiTree( args );
+        String what = "initializing connection";
 
 	try {
 
-	    doit( "getPerson for Churchill-4 (WikiTree id for W. S. Churchill)", request.getPerson( "Churchill-4" ) );
+	    URL serverUrl = new URL( _baseServerUrlString );
 
-	    doit( "getPerson for 5589 (Person.Id for W. S. Churchill)", request.getPerson( "5589" ) );
+	    URLConnection urlConnection = serverUrl.openConnection();
+	    HttpURLConnection connection = (HttpURLConnection)urlConnection;
+	    connection.setDoOutput( true );
+	    connection.setDoInput( true );
+	    connection.setRequestProperty( "Content-Type", "application/json; charset=UTF-8" );
+	    connection.setRequestProperty( "Accept", "application/json" );
+	    connection.setRequestMethod( "POST" );
 
-	    doit( "getPerson for non-existent Churchill-4548988", request.getPerson( "Churchill-4548988" ) );
+	    what = "posting request";
 
-	    doit( "getProfile for Churchill-4 (WikiTree id for W. S. Churchill)", request.getProfile( "Churchill-4" ) );
+	    try ( OutputStream writer = connection.getOutputStream() ) {
 
-	    doit( "getProfile for Space:Allied_POW_camps", request.getProfile( "Space:Allied_POW_camps" ) );
+		writer.write( ( requestString + '\n' ).getBytes( "UTF-8" ) );
+		writer.flush();
 
-	    doit( "getProfile for Profile Id 7933358 (Space:Allied_POW_camps)", request.getProfile( "7933538" ) );
+	    } finally {
 
-	    doit( "getPerson for Boulet-169 (author of this API, a living person (private with public bio and family tree))", request.getPerson( "Boulet-169" ) );
-	    doit( "getProfile for Boulet-169 (author of this API, a living person (private with public bio and family tree))", request.getProfile( "Boulet-169" ) );
-	    doit( "getBio for Boulet-169 (author of this API, a living person (private with public bio and family tree))", request.getBio( "Boulet-169" ) );
+		System.out.println( "writer closed" );
 
-	    doit( "getAncestors to depth of 3 for Churchill-4 (WikiTree id for W. S. Churchill)", request.getAncestors( "Churchill-4", 3 ) );
+	    }
 
-	    doit( "getRelatives children and spouses of Churchill-4 (W. S. Churchill)", request.getRelatives( "Churchill-4", false, true, true, false ) );
+	    what = "getting response";
 
-	    doit( "getRelatives parents of 5589 (W. S. Churchill) and Roosevelt-1 (F. D. Roosevelt)", request.getRelatives( "5589,Roosevelt-1", true, false, false, false ) );
+	    @SuppressWarnings("UnnecessaryLocalVariable")
+	    Object rval = WikiTreeApiUtilities.readResponse( connection, true );
 
-	    doit(
-	    	"watchlist of authenticated user for this session limit of 10",
-		request.getWatchlist( true, true, null, null, null, 10, null, null )
-	    );
+	    if ( rval == null || rval instanceof JSONObject ) {
 
-	    return;
+		return (JSONObject)rval;
 
-	} catch ( IOException e ) {
+	    } else {
+
+		throw new ReallyBadNewsError( "requestViaJsonPost:  expected a JSONObject, got this instead:  " + rval );
+
+	    }
+
+	} catch ( IOException | ParseException | RuntimeException e ) {
+
+	    System.err.println( "unable to issue POST to \"" + _baseServerUrlString + "\" (doing " + what + "):  " + what );
 
 	    e.printStackTrace();
 
-	} catch ( ParseException e ) {
-
-	    e.printStackTrace();
+	    throw e;
 
 	}
-
-	return;
 
     }
 
-    /**
-     Try to turn this into an authenticated client instance if the name of a WikiTree user info file was provided to us.
-     <p/>This method is intended to only be used to construct test software for this WikiTree Java API.
-     It is also used within the fairly primitive sanity test code in our {@link #main} method.
-     Production software should invoke {@link #login(String, String)} or {@link #login(String, String, String)} directly.
-     <p/>A WikiTree user info file must satisfy all of these requirements:
-     <ul>
-     <li>the file must be a two line text file.</li>
-     <li>the file's name must end with {@code ".wtu"}.</li>
-     <li>The first line must contain an email address that is associated with a WikiTree.com account.
-     Any leading or trailing whitespace on this line is ignored.</li>
-     <li>The second line must contain the password for the WikiTree account associated with the email address on the first line.
-     Neither leading nor trailing space on this line is ignored (it isn't our job to impose password rules).</li>
-     </ul>
-     @param args the args provided when this JVM started up.
-     */
+    public static StatisticsAccumulator getTimingStats() {
 
-    public void maybeLoginToWikiTree( String[] args ) {
-
-	if ( args.length == 0 ) {
-
-	    System.out.println( "no user info file specified on command line, proceeding as an anonymous user" );
-
-	} else if ( args.length == 1 ) {
-
-	    String userInfoFileName = args[0];
-
-	    if ( !userInfoFileName.endsWith( ".wtu" ) ) {
-
-	        System.err.println( "WikiTree user info file specified on the command line does not have a \".wtu\" suffix - bailing out" );
-
-	        System.exit( 1 );
-	    }
-
-	    System.out.println( "using WikiTree user info file at " + userInfoFileName );
-
-	    try {
-
-		LineNumberReader lnr = new LineNumberReader( new FileReader( userInfoFileName ) );
-
-		String userName = lnr.readLine();
-		if ( userName == null ) {
-
-		    System.out.flush();
-		    System.err.println( "user info file \"" + userInfoFileName + "\" is empty" );
-		    System.exit( 1 );
-
-		}
-		userName = userName.trim();
-
-		String password = lnr.readLine();
-		if ( password == null ) {
-
-		    System.out.flush();
-		    System.err.println( "user info file \"" + userInfoFileName + "\" only has one line (first line must be an email address; second line must be WikiTree password for that email address)" );
-		    System.exit( 1 );
-
-		}
-
-		boolean loginResponse = login( userName, password );
-		if ( loginResponse ) {
-
-		    System.out.println( "authenticated session for \"" + userName + " \" created" );
-
-		} else {
-
-		    System.out.flush();
-		    System.err.println( "unable to create authenticated session for \"" + userName + "\" (probably incorrect user name or incorrect password; could be network problems or maybe even an invasion of space aliens)" );
-		    System.err.flush();
-		    System.out.println( "first line of " + userInfoFileName + " must contain the email address that you use to login to WikiTree" );
-		    System.out.println( "second line of " + userInfoFileName + " must contain the WikiTree password for that email address" );
-		    System.out.println( "leading or trailing whitespace on the email line is ignored" );
-		    System.out.println( "IMPORTANT:  leading or trailing whitespace on the password line is NOT ignored" );
-		    System.out.flush();
-		    System.exit( 1 );
-
-		}
-
-	    } catch ( FileNotFoundException e ) {
-
-	        System.out.flush();
-	        System.err.println( "unable to open user info file - " + e.getMessage() );
-		System.exit( 1 );
-
-	    } catch ( ParseException e ) {
-
-		System.out.flush();
-	        System.err.println( "unable to parse response from server (probably a bug; notify danny@matilda.com)" );
-		e.printStackTrace();
-		System.exit( 1 );
-
-	    } catch ( IOException e ) {
-
-		System.out.flush();
-	        System.err.println( "something went wrong in i/o land" );
-		e.printStackTrace();
-		System.exit( 1 );
-
-	    }
-
-	} else {
-
-	    System.err.println( "you must specify either no parameter or one parameter" );
-	    System.exit( 1 );
-
-	}
+        return s_innerRequestStats;
 
     }
 
