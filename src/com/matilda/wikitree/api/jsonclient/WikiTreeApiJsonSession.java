@@ -16,7 +16,6 @@ import org.json.simple.*;
 import java.io.*;
 import java.net.*;
 import java.util.Collection;
-import java.util.Date;
 import java.util.Vector;
 
 /**
@@ -381,7 +380,7 @@ public class WikiTreeApiJsonSession implements WikiTreeApiClient {
      @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request information about Winston S. Churchill (UK Prime Minister during the Second World War).
-     @return A JSONObject containing the profile information for the specified person, their parents, their siblings, and their children.
+     @return A {@link JSONObject} containing the profile information for the specified person, their parents, their siblings, and their children.
      @throws IOException if an IOException is thrown by the networking facilities used to send and receive the login request.
      @throws ParseException if this client is unable to process the response from the WikiTree API server. Seeing this exception should be a rather rare occurrence.
      If you do see one, you have probably encountered a bug in this software. Please notify danny@matilda.com if you get this exception (be prepared to work with Danny
@@ -403,7 +402,9 @@ public class WikiTreeApiJsonSession implements WikiTreeApiClient {
      @param key the specified person's WikiTree ID or Person.Id.
      This parameter will be treated as a Person.Id if it can be successfully parsed by {@link Integer#parseInt(String)}.
      For example, specify either {@code "Churchill-4"} (his WikiTree ID) or {@code "5589"} (his Person.Id) to request information about Winston S. Churchill (UK Prime Minister during the Second World War).
-     @param fields a comma separated list of the fields that you want returned. Specifying {@code "*"} will get you all the available fields.
+     @param fields a comma separated list of the fields that you want returned. Specifying {@code "*"} will get you all the available fields
+     (see {@link WikiTreeApiUtilities#constructGetPersonFieldsString(String[])} for a relatively painless way to construct a value for this parameter which
+     includes all but a few of the available fields).
      @return A JSONObject containing the profile information for the specified person, their parents, their siblings, and their children.
      @throws IOException if an IOException is thrown by the networking facilities used to send and receive the login request.
      @throws ParseException if this client is unable to process the response from the WikiTree API server. Seeing this exception should be a rather rare occurrence.

@@ -17,10 +17,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 
 /**
  Useful utility methods.
@@ -28,6 +25,54 @@ import java.util.TimeZone;
 
 @SuppressWarnings("WeakerAccess")
 public class WikiTreeApiUtilities {
+
+    /**
+     A sorted set of the fields returned by the WikiTree API's {@code getPerson} request according to
+     <a href="https://www.wikitree.com/wiki/Help:API_Documentation#getPerson">https://www.wikitree.com/wiki/Help:API_Documentation#getPerson</a> on 2017/06/14.
+     */
+
+    public static final SortedSet<String> S_ALL_GET_PERSON_FIELDS_SET;
+
+    static {
+
+	SortedSet<String> tmpSet = new TreeSet<>();
+	Collections.addAll( tmpSet,
+			    "Id",
+			    "Name",
+			    "FirstName",
+			    "MiddleName",
+			    "LastNameAtBirth",
+			    "LastNameCurrent",
+			    "Nicknames",
+			    "LastNameOther",
+			    "RealName",
+			    "Prefix",
+			    "Suffix",
+			    "Gender",
+			    "BirthDate",
+			    "DeathDate",
+			    "BirthLocation",
+			    "DeathLocation",
+			    "BirthDateDecade",
+			    "DeathDateDecade",
+			    "Photo",
+			    "IsLiving",
+			    "Privacy",
+			    "Mother",
+			    "Father",
+			    "Parents",
+			    "Children",
+			    "Siblings",
+			    "Spouses",
+			    "Derived.ShortName",
+			    "Derived.BirthNamePrivate",
+			    "Derived.LongNamePrivate",
+			    "Manager"
+	);
+
+	S_ALL_GET_PERSON_FIELDS_SET = Collections.unmodifiableSortedSet( tmpSet );
+
+    }
 
     private static final SimpleDateFormat STANDARD_MS = new SimpleDateFormat( "yyyy-MM-dd'T'HH:mm:ss.SSSZ" );
 
@@ -164,6 +209,45 @@ public class WikiTreeApiUtilities {
 	    return rval;
 
 	}
+
+    }
+
+    public static SortedSet<String> constructExcludedGetPersonFieldsSet( String ... excludedFields ) {
+
+	SortedSet<String> tmpFields = new TreeSet<>();
+	Collections.addAll( tmpFields, excludedFields );
+
+	return constructExcludedGetPersonFieldsSet( tmpFields );
+
+    }
+
+    public static SortedSet<String> constructExcludedGetPersonFieldsSet( @NotNull SortedSet<String> excludedFields ) {
+
+	SortedSet<String> includedFields = new TreeSet<>( S_ALL_GET_PERSON_FIELDS_SET );
+	includedFields.removeAll( excludedFields );
+
+	return includedFields;
+
+    }
+
+    public static String constructGetPersonFieldsString( @NotNull SortedSet<String> includedFields ) {
+
+        return constructGetPersonFieldsString( includedFields.toArray( new String[ includedFields.size() ] ) );
+
+    }
+
+    public static String constructGetPersonFieldsString( String ... includedFields ) {
+
+        StringBuilder sb = new StringBuilder();
+        String comma = "";
+        for ( String includedField : includedFields ) {
+
+            sb.append( comma ).append( includedField );
+            comma = ",";
+
+	}
+
+	return sb.toString();
 
     }
 

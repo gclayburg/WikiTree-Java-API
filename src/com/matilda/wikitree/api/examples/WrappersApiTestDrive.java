@@ -41,6 +41,21 @@ public class WrappersApiTestDrive {
 	    System.out.println( "Churchill's profile via getPersonProfile is " + churchillProfile2 );
 	    WikiTreeApiUtilities.prettyPrintJsonThing( "Churchill's person profile via getPersonProfile request", churchillProfile2 );
 
+	    WikiTreePersonProfile bouletProfile = request.getPersonProfile( "Boulet-169" );
+	    WikiTreeApiUtilities.prettyPrintJsonThing( "boulet profile", bouletProfile );
+	    WikiTreePersonProfile bouletManagerProfile = request.getPersonProfile( "" + bouletProfile.get( "Manager" ) );
+	    WikiTreeApiUtilities.prettyPrintJsonThing( "boulet manager profile", bouletManagerProfile );
+
+	    WikiTreePersonProfile bouletViaLimitedGetPerson = request.getPerson(
+	    	"Boulet-169",
+		WikiTreeApiUtilities.constructGetPersonFieldsString(
+			WikiTreeApiUtilities.constructExcludedGetPersonFieldsSet(
+				"Parents", "Spouses", "Children", "Siblings"
+			)
+		)
+	    );
+	    WikiTreeApiUtilities.prettyPrintJsonThing( "boulet via limited getPerson", bouletViaLimitedGetPerson );
+
 	    WikiTreeProfile spaceProfile = request.getProfile( "Space:Allied_POW_camps" );
 	    WikiTreeApiUtilities.prettyPrintJsonThing( "getProfile for Space:Allied_POW_camps", spaceProfile );
 	    System.out.println( "space profile is " + spaceProfile );

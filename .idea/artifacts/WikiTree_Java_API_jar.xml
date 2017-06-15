@@ -1,0 +1,11 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="WikiTree-Java-API:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/WikiTree_Java_API_jar</output-path>
+    <root id="archive" name="WikiTree-Java-API.jar">
+      <element id="module-output" name="main" />
+      <element id="module-output" name="WikiTree-Java-API" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/junit-4.11.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/annotations.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

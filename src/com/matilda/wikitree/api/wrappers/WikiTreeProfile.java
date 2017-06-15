@@ -21,8 +21,42 @@ import com.matilda.wikitree.api.util.WikiTreeApiUtilities;
 
 public abstract class WikiTreeProfile extends WikiTreeWrapper {
 
-    protected WikiTreeProfile( @NotNull JSONObject jsonObject ) {
-        super( jsonObject );
+    private final JSONObject _originalJSONObject;
+
+    protected WikiTreeProfile( @NotNull JSONObject jsonObject, String[] profileLocation ) {
+//        super( jsonObject );
+	super(
+		// Apologies for using an inline-if in a call to {@code super()}.
+		// This seems cleaner than the alternative of passing something arbitrary to this {@code super()} call and then
+		// fixing things up later if we guessed wrong.
+
+		// Were we handed a naked profile object?
+		// I am not sure if profileLocation can be null but let's check it to avoid surprises.
+		// After all, the caller's meaning is presumably clear if it is null - that the path is empty.
+
+		profileLocation == null || profileLocation.length == 0
+
+			?
+
+			// Yes - remember it
+
+			jsonObject
+
+			:
+
+			// No - remember the actual profile object
+
+			(JSONObject)WikiTreeApiUtilities.getMandatoryJsonValue( JSONObject.class, jsonObject, profileLocation )
+
+	);
+
+	_originalJSONObject = jsonObject;
+
+    }
+
+    public JSONObject getOriginalJSONObject() {
+
+        return _originalJSONObject;
 
     }
 

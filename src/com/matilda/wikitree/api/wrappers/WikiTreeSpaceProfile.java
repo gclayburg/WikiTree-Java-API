@@ -21,7 +21,7 @@ public class WikiTreeSpaceProfile extends WikiTreeProfile {
      */
 
     public WikiTreeSpaceProfile( @NotNull JSONObject rval ) {
-	super( rval );
+	super( rval, new String[] { "profile" } );
 
 	if ( containsKey( "page_name" ) ) {
 
@@ -46,7 +46,7 @@ public class WikiTreeSpaceProfile extends WikiTreeProfile {
 
     public String getPageName() {
 
-        return (String)get( "page_name" );
+        return (String)getOriginalJSONObject().get( "page_name" );
 
     }
 
@@ -57,7 +57,7 @@ public class WikiTreeSpaceProfile extends WikiTreeProfile {
 
     public String getPageId() {
 
-        return (String) WikiTreeApiUtilities.getMandatoryJsonValue( this, "profile", "PageId" );
+        return (String) WikiTreeApiUtilities.getMandatoryJsonValue( this, "PageId" );
 
     }
 

@@ -68,30 +68,7 @@ public class WikiTreePersonProfile extends WikiTreeProfile {
 	    @NotNull JSONObject jsonObject,
 	    String... profileLocation
     ) {
-	super(
-		// Apologies for using an inline-if in a call to {@code super()}.
-		// This seems cleaner than the alternative of passing something arbitrary to this {@code super()} call and then
-		// fixing things up later if we guessed wrong.
-
-		// Were we handed a naked profile object?
-		// I am not sure if profileLocation can be null but let's check it to avoid surprises (the caller's meaning is presumably
-		// clear if it is null - that the path is empty).
-
-		profileLocation == null || profileLocation.length == 0
-
-			?
-
-			// Yes - remember it
-
-			jsonObject
-
-			:
-
-			// No - remember the actual profile object
-
-			(JSONObject)WikiTreeApiUtilities.getMandatoryJsonValue( JSONObject.class, jsonObject, profileLocation )
-
-	);
+        super( jsonObject, profileLocation );
 
 	if ( requestType == null ) {
 
