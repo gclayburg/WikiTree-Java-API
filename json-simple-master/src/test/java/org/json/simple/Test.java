@@ -30,7 +30,7 @@ public class Test extends TestCase{
 		System.out.println("=======decode=======");
 		
 		String s="[0,{\"1\":{\"2\":{\"3\":{\"4\":[5,{\"6\":7}]}}}}]";
-		Object obj=JSONValue.parse(s);
+		Object obj=JSONValue.parseWithException(s);
 		JSONArray array=(JSONArray)obj;
 		System.out.println("======the 2nd element of array======");
 		System.out.println(array.get(1));
@@ -43,19 +43,19 @@ public class Test extends TestCase{
 		assertEquals("{\"2\":{\"3\":{\"4\":[5,{\"6\":7}]}}}",obj2.get("1").toString());
 		
 		s="{}";
-		obj=JSONValue.parse(s);
+		obj=JSONValue.parseWithException(s);
 		assertEquals("{}",obj.toString());
 		
 		s="[5,]";
-		obj=JSONValue.parse(s);
+		obj=JSONValue.parseWithException(s);
 		assertEquals("[5]",obj.toString());
 		
 		s="[5,,2]";
-		obj=JSONValue.parse(s);
+		obj=JSONValue.parseWithException(s);
 		assertEquals("[5,2]",obj.toString());
 		
 		s="[\"hello\\bworld\\\"abc\\tdef\\\\ghi\\rjkl\\n123\\u4e2d\"]";
-		obj=JSONValue.parse(s);
+		obj=JSONValue.parseWithException(s);
 		assertEquals("hello\bworld\"abc\tdef\\ghi\rjkl\n123中",((List)obj).get(0).toString());
 		
 		JSONParser parser = new JSONParser();

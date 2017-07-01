@@ -5,6 +5,7 @@
 package com.matilda.wikitree.api.wrappers;
 
 import com.matilda.wikitree.api.exceptions.ReallyBadNewsError;
+import com.matilda.wikitree.api.exceptions.WikiTreeRequestFailedException;
 import com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession;
 import com.matilda.wikitree.api.util.WikiTreeApiUtilities;
 import org.jetbrains.annotations.NotNull;
@@ -22,13 +23,13 @@ import java.util.*;
 @SuppressWarnings({ "WeakerAccess", "unused" })
 public class WikiTreeAncestors extends WikiTreeWrapper {
 
-    private final String _resultWikiTreeID;
+    private final WikiTreeId _resultWikiTreeID;
 
     private final long _resultPersonId;
 
     private final String _resultKeyString;
 
-    private final String _requestKey;
+    private final WikiTreeId _requestKey;
 
     private final Integer _requestDepth;
 
@@ -36,7 +37,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     private final SortedMap<Long, WikiTreePersonProfile> _profilesByPersonId = new TreeMap<>();
 
-    private final SortedMap<String, WikiTreePersonProfile> _profilesByWikiTreeId = new TreeMap<>();
+    private final SortedMap<WikiTreeId, WikiTreePersonProfile> _profilesByWikiTreeId = new TreeMap<>();
 
     private final SortedMap<Long, WikiTreePersonProfile> _fathersOf = new TreeMap<>();
 
@@ -54,184 +55,193 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
     private static final String NONEMPTY_INDENT = "|" + WikiTreeApiUtilities.repl( " ", INDENT_PER_LEVEL - 1 );
 
     /**
-     Create a wrapper for the {@link JSONObject} provided by a call to {@link WikiTreeApiJsonSession#getAncestors(String, Integer)}.
-     @param key the WikiTree ID or the Person.Id who's ancestors are being used to create this instance.
-     @param depth the requested depth (could be {@code null}; see {@link WikiTreeApiJsonSession#getAncestors(String, Integer)} for more info).
+     Create a wrapper for the {@link JSONObject} provided by a call to {@link WikiTreeApiJsonSession#getAncestors(WikiTreeId, Integer)}.
+
+     @param key          the WikiTree ID or the Person.Id who's ancestors are being used to create this instance.
+     @param depth        the requested depth (could be {@code null}; see {@link WikiTreeApiJsonSession#getAncestors(WikiTreeId, Integer)} for more info).
      @param resultObject the result received from the WikiTree API server in response to a {@code getAncestors} request (in other words,
-     what was returned by the call to {@link WikiTreeApiJsonSession#getAncestors(String, Integer)} call).
+     what was returned by the call to {@link WikiTreeApiJsonSession#getAncestors(WikiTreeId, Integer)} call).
      */
 
-    public WikiTreeAncestors( @NotNull String key, @Nullable Integer depth, @NotNull JSONObject resultObject ) {
-	super( resultObject );
+    public WikiTreeAncestors(
+            @NotNull WikiTreeId key,
+            @Nullable Integer depth,
+            @NotNull JSONObject resultObject
+    )
+            throws WikiTreeRequestFailedException {
 
-	_requestKey = key;
-	_requestDepth = depth;
-	boolean resultKeyIsId;
-	if ( resultObject.containsKey( "user_name" ) ) {
+        super( resultObject );
 
-	    _resultKeyString = (String) WikiTreeApiUtilities.getMandatoryJsonValue( String.class, resultObject, "user_name" );
-	    resultKeyIsId = false;
+        _requestKey = key;
+        _requestDepth = depth;
+        boolean resultKeyIsId;
+        if ( resultObject.containsKey( "user_name" ) ) {
 
-	} else if ( resultObject.containsKey( "user_id" ) ) {
+            _resultKeyString = (String)WikiTreeApiUtilities.getMandatoryJsonValue( String.class, resultObject, "user_name" );
+            resultKeyIsId = false;
 
-	    _resultKeyString = (String) WikiTreeApiUtilities.getMandatoryJsonValue( String.class, resultObject, "user_id" );
-	    resultKeyIsId = true;
+        } else if ( resultObject.containsKey( "user_id" ) ) {
 
-	} else {
+            _resultKeyString = (String)WikiTreeApiUtilities.getMandatoryJsonValue( String.class, resultObject, "user_id" );
+            resultKeyIsId = true;
 
-	    throw new ReallyBadNewsError( "WikiTreeAncestors:  JSON object contains neither a \"user_name\" nor a \"user_id\" field name - " + resultObject );
+        } else {
 
-	}
+            throw new ReallyBadNewsError( "WikiTreeAncestors:  JSON object contains neither a \"user_name\" nor a \"user_id\" field name - " +
+                                          resultObject );
 
-	JSONArray resultAncestors = (JSONArray)WikiTreeApiUtilities.getMandatoryJsonValue( JSONArray.class, resultObject, "ancestors" );
-	_resultAncestors = new Vector<>();
-	for ( Object ancestorObject : resultAncestors ) {
+        }
 
-	    if ( ancestorObject instanceof JSONObject ) {
+        JSONArray resultAncestors = (JSONArray)WikiTreeApiUtilities.getMandatoryJsonValue( JSONArray.class, resultObject, "ancestors" );
+        _resultAncestors = new Vector<>();
+        for ( Object ancestorObject : resultAncestors ) {
 
-	        WikiTreePersonProfile ancestorProfile = new WikiTreePersonProfile( WikiTreeRequestType.UNKNOWN, (JSONObject)ancestorObject );
-	        _resultAncestors.add( ancestorProfile );
+            if ( ancestorObject instanceof JSONObject ) {
 
-	    } else {
+                WikiTreePersonProfile ancestorProfile = new WikiTreePersonProfile( WikiTreeRequestType.UNKNOWN, (JSONObject)ancestorObject );
+                _resultAncestors.add( ancestorProfile );
 
-		throw new ReallyBadNewsError(
-			"WikiTreeAncestors:  found a " +
-			( ancestorObject == null ? "null" : ancestorObject.getClass().getCanonicalName() ) +
-			" in ancestors array"
-		);
+            } else {
 
-	    }
+                throw new ReallyBadNewsError(
+                        "WikiTreeAncestors:  found a " +
+                        ( ancestorObject == null ? "null" : ancestorObject.getClass().getCanonicalName() ) +
+                        " in ancestors array"
+                );
 
-	}
+            }
 
-	// Time to turn what we got from the WikiTree API into an ancestral tree.
+        }
 
-	// Discard any parent findings that the WikiTreePersonProfile constructor may have made.
+        // Time to turn what we got from the WikiTree API into an ancestral tree.
 
-	for ( WikiTreePersonProfile profile : _resultAncestors ) {
+        // Discard any parent findings that the WikiTreePersonProfile constructor may have made.
 
-	    profile.setBiologicalFather( null );
-	    profile.setBiologicalMother( null );
+        for ( WikiTreePersonProfile profile : _resultAncestors ) {
 
-	}
+            profile.setBiologicalFather( null );
+            profile.setBiologicalMother( null );
 
-	// Build maps of everyone involved.
-	// Find the base person's profile on the way by.
+        }
 
-	WikiTreePersonProfile basePersonProfile = null;
-	for ( WikiTreePersonProfile profile : _resultAncestors ) {
+        // Build maps of everyone involved.
+        // Find the base person's profile on the way by.
 
-	    if ( _resultKeyString.equals( "" + profile.getPersonId() ) || _resultKeyString.equals( profile.getWikiTreeId() ) ) {
+        WikiTreePersonProfile basePersonProfile = null;
+        for ( WikiTreePersonProfile profile : _resultAncestors ) {
 
-	        basePersonProfile = profile;
+            if ( _resultKeyString.equals( "" + profile.getPersonId() ) || _resultKeyString.equals( "" + profile.getWikiTreeId() ) ) {
 
-	    }
+                basePersonProfile = profile;
 
-	    _profilesByPersonId.put( profile.getPersonId(), profile );
-	    _profilesByWikiTreeId.put( profile.getWikiTreeId(), profile );
+            }
 
-	}
+            _profilesByPersonId.put( profile.getPersonId(), profile );
+            _profilesByWikiTreeId.put( profile.getWikiTreeId(), profile );
 
-	if ( basePersonProfile == null ) {
+        }
 
-	    throw new ReallyBadNewsError( "WikiTreeAncestors:  did not find the base person's profile (" + _resultKeyString + ") in the results" );
+        if ( basePersonProfile == null ) {
 
-	}
+            throw new ReallyBadNewsError( "WikiTreeAncestors:  did not find the base person's profile (" + _resultKeyString + ") in the results" );
 
-	_resultWikiTreeID = basePersonProfile.getWikiTreeId();
-	_resultPersonId = basePersonProfile.getPersonId();
+        }
 
-	_basePersonProfile = basePersonProfile;
+        _resultWikiTreeID = basePersonProfile.getWikiTreeId();
+        _resultPersonId = basePersonProfile.getPersonId();
 
-	// Collect the mothers and fathers.
+        _basePersonProfile = basePersonProfile;
 
-	for ( WikiTreePersonProfile profile : _resultAncestors ) {
+        // Collect the mothers and fathers.
 
-	    rememberParent( _profilesByPersonId, _fathersOf, "Father", profile );
-	    rememberParent( _profilesByPersonId, _mothersOf, "Mother", profile );
+        for ( WikiTreePersonProfile profile : _resultAncestors ) {
 
-	}
+            rememberParent( _profilesByPersonId, _fathersOf, "Father", profile );
+            rememberParent( _profilesByPersonId, _mothersOf, "Mother", profile );
 
-	// Keep track of ancestors already in the lineage that we're working on.
+        }
 
-	SortedSet<Long> lineage = new TreeSet<>();
+        // Keep track of ancestors already in the lineage that we're working on.
 
-	// Boom!
+        SortedSet<Long> lineage = new TreeSet<>();
 
-	_ancestralTree = buildAncestralTree( _basePersonProfile, lineage );
+        // Boom!
+
+        _ancestralTree = buildAncestralTree( _basePersonProfile, lineage );
 
 //	printAncestralTree( System.out );
 
     }
 
     private void rememberParent(
-	    SortedMap<Long, WikiTreePersonProfile> profiles,
-	    SortedMap<Long, WikiTreePersonProfile> myParent,
-	    String relationship,
-	    WikiTreePersonProfile personProfile
+            SortedMap<Long, WikiTreePersonProfile> profiles,
+            SortedMap<Long, WikiTreePersonProfile> myParent,
+            String relationship,
+            WikiTreePersonProfile personProfile
     ) {
 
-	Number parentNumber = (Number) WikiTreeApiUtilities.getOptionalJsonValue( Number.class, personProfile, relationship );
-	if ( parentNumber != null ) {
+        Number parentNumber = (Number)WikiTreeApiUtilities.getOptionalJsonValue( Number.class, personProfile, relationship );
+        if ( parentNumber != null ) {
 
-	    WikiTreePersonProfile parent = profiles.get( parentNumber.longValue() );
-	    if ( parent != null ) {
+            WikiTreePersonProfile parent = profiles.get( parentNumber.longValue() );
+            if ( parent != null ) {
 
-		myParent.put( personProfile.getPersonId(), parent );
+                myParent.put( personProfile.getPersonId(), parent );
 
-	    }
+            }
 
-	}
+        }
 
     }
 
     private WikiTreePersonProfile buildAncestralTree( WikiTreePersonProfile targetPersonProfile, SortedSet<Long> lineage ) {
 
-	// Is this person a descendant in the line we're working on?
-	// For example, is this person a son, grandson, daughter, granddaughter, etc of the current targeted person?
+        // Is this person a descendant in the line we're working on?
+        // For example, is this person a son, grandson, daughter, granddaughter, etc of the current targeted person?
 
-	if ( lineage.contains( targetPersonProfile.getPersonId() ) ) {
+        if ( lineage.contains( targetPersonProfile.getPersonId() ) ) {
 
-	    // We're our own grandpa (or something like that).
-	    // That's not a game we are interested in playing.
-	    // Chop the tree of ancestors here (i.e. don't return a profile for the part of the tree we're working on).
+            // We're our own grandpa (or something like that).
+            // That's not a game we are interested in playing.
+            // Chop the tree of ancestors here (i.e. don't return a profile for the part of the tree we're working on).
 
-	    return null;
+            return null;
 
-	}
+        }
 
-	// Put the targeted person into the current lineage.
+        // Put the targeted person into the current lineage.
 
-	lineage.add( targetPersonProfile.getPersonId() );
+        lineage.add( targetPersonProfile.getPersonId() );
 
-	// Use recursion to add the targeted person's father to the tree.
+        // Use recursion to add the targeted person's father to the tree.
 
-	WikiTreePersonProfile father = _fathersOf.get( targetPersonProfile.getPersonId() );
-	if ( father != null ) {
+        WikiTreePersonProfile father = _fathersOf.get( targetPersonProfile.getPersonId() );
+        if ( father != null ) {
 
-	    targetPersonProfile.setBiologicalFather( buildAncestralTree( father, lineage ) );
+            targetPersonProfile.setBiologicalFather( buildAncestralTree( father, lineage ) );
 
-	}
+        }
 
-	// Use recursion to add the targeted person's mother to the tree.
+        // Use recursion to add the targeted person's mother to the tree.
 
-	WikiTreePersonProfile mother = _mothersOf.get( targetPersonProfile.getPersonId() );
-	if ( mother != null ) {
+        WikiTreePersonProfile mother = _mothersOf.get( targetPersonProfile.getPersonId() );
+        if ( mother != null ) {
 
-	    targetPersonProfile.setBiologicalMother( buildAncestralTree( mother, lineage ) );
+            targetPersonProfile.setBiologicalMother( buildAncestralTree( mother, lineage ) );
 
-	}
+        }
 
-	// We're done with this person so remove them from the lineage.
+        // We're done with this person so remove them from the lineage.
 
-	lineage.remove( targetPersonProfile.getPersonId() );
+        lineage.remove( targetPersonProfile.getPersonId() );
 
-	return targetPersonProfile;
+        return targetPersonProfile;
 
     }
 
     /**
      Print this instance's ancestral tree in a vaguely human readable format.
+
      @param ps where to print it.
      */
 
@@ -243,7 +253,8 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     /**
      Print an ancestral tree in a vaguely human readable format.
-     @param ps where to print it.
+
+     @param ps          where to print it.
      @param baseProfile the profile at the base of the ancestral tree.
      */
 
@@ -255,53 +266,56 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     private void printAncestralTree( PrintStream ps, boolean goingLeft, String fullIndentString, String role, WikiTreePersonProfile profile ) {
 
-	if ( profile != null ) {
+        if ( profile != null ) {
 
-	    String chopped = fullIndentString.substring( 0, fullIndentString.length() - INDENT_PER_LEVEL );
-	    String replaced =
-		    chopped + EMPTY_INDENT + NONEMPTY_INDENT;
-	    if ( goingLeft ) {
+            String chopped = fullIndentString.substring( 0, fullIndentString.length() - INDENT_PER_LEVEL );
+            String replaced =
+                    chopped + EMPTY_INDENT + NONEMPTY_INDENT;
+            if ( goingLeft ) {
 
-	        printAncestralTree( ps, true, replaced, "F", profile.getBiologicalFather() );
-	        printLine( ps,
-	        	chopped + HANGER + role + " - " + profile.getShortName() +
-			" (" + WikiTreeApiUtilities.cleanupStringDate( profile.get( "BirthDate" ) ) + "," +
-			WikiTreeApiUtilities.cleanupStringDate( profile.get( "DeathDate" ) ) + ")"
-		);
-	        printAncestralTree( ps, false, fullIndentString + NONEMPTY_INDENT, "M", profile.getBiologicalMother() );
-	        printLine( ps, fullIndentString );
+                printAncestralTree( ps, true, replaced, "F", profile.getBiologicalFather() );
+                printLine(
+                        ps,
+                        chopped + HANGER + role + " - " + profile.getShortName() +
+                        " (" + WikiTreeApiUtilities.cleanupStringDate( profile.get( "BirthDate" ) ) + "," +
+                        WikiTreeApiUtilities.cleanupStringDate( profile.get( "DeathDate" ) ) + ")"
+                );
+                printAncestralTree( ps, false, fullIndentString + NONEMPTY_INDENT, "M", profile.getBiologicalMother() );
+                printLine( ps, fullIndentString );
 
-	    } else {
+            } else {
 
-		printLine( ps, fullIndentString );
-	        printAncestralTree( ps, true, fullIndentString + NONEMPTY_INDENT, "F", profile.getBiologicalFather() );
-		printLine( ps,
-			chopped + HANGER + role + " - " + profile.getShortName() +
-			" (" + WikiTreeApiUtilities.cleanupStringDate( profile.get( "BirthDate" ) ) + "," +
-			WikiTreeApiUtilities.cleanupStringDate( profile.get( "DeathDate" ) ) + ")"
-		);
-		printAncestralTree( ps, false, replaced, "M", profile.getBiologicalMother() );
+                printLine( ps, fullIndentString );
+                printAncestralTree( ps, true, fullIndentString + NONEMPTY_INDENT, "F", profile.getBiologicalFather() );
+                printLine(
+                        ps,
+                        chopped + HANGER + role + " - " + profile.getShortName() +
+                        " (" + WikiTreeApiUtilities.cleanupStringDate( profile.get( "BirthDate" ) ) + "," +
+                        WikiTreeApiUtilities.cleanupStringDate( profile.get( "DeathDate" ) ) + ")"
+                );
+                printAncestralTree( ps, false, replaced, "M", profile.getBiologicalMother() );
 
-	    }
+            }
 
-	}
+        }
 
     }
 
     /**
      A handy place to hang a breakpoint and an easy way to avoid the extra blank line that appears after the
      ancestral tree has been printed.
-     @param ps where to send the line.
+
+     @param ps   where to send the line.
      @param line the line to send.
      */
 
     private void printLine( PrintStream ps, String line ) {
 
-	if ( !line.trim().isEmpty() ) {
+        if ( !line.trim().isEmpty() ) {
 
             ps.println( line );
 
-	}
+        }
 
     }
 
@@ -313,32 +327,35 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      Note that this corresponds to what a {@code get( "user_name" ) } request on this instance will yield
      (unless someone has fiddled with this instance's values using {@link #put(Object, Object)} (or some variant)
      since this instance was created).
+
      @return the WikiTree ID of the person who's ancestors appear in this instance.
      This is also the WikiTree ID of the person specified when these ancestors were fetched.
      */
 
-    public String getResultWikiTreeID() {
+    public WikiTreeId getResultWikiTreeID() {
 
-	return _resultWikiTreeID;
+        return _resultWikiTreeID;
 
     }
 
     /**
      Get the key that was specified when fetching these ancestors.
+
      @return the key that was specified when fetching these ancestors.
-     See {@link WikiTreeApiJsonSession#getAncestors(String, Integer)} for more info.
+     See {@link WikiTreeApiJsonSession#getAncestors(WikiTreeId, Integer)} for more info.
      */
 
-    public String getRequestKey() {
+    public WikiTreeId getRequestKey() {
 
-	return _requestKey;
+        return _requestKey;
     }
 
     /**
      Get the depth that was requested when these ancestors were fetched.
+
      @return the depth / number of generations of ancestors requested when these ancestors were fetched.
      If {@code null}, the depth defaults to a value specified in the documentation for
-     {@link WikiTreeApiJsonSession#getAncestors(String, Integer)}.
+     {@link WikiTreeApiJsonSession#getAncestors(WikiTreeId, Integer)}.
      This includes the person who's ancestors were requested.
      For example, if depth is 2 then you'll get the specified person and their parents whereas if the depth is 3 then
      you'll get the specified person, their parents and their grandparents.
@@ -347,7 +364,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     public Integer getRequestDepth() {
 
-	return _requestDepth;
+        return _requestDepth;
 
     }
 
@@ -355,6 +372,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      Get the base person's profile.
      <p/>The base person is the person who's ancestors were used to create this instance.
      The base person is also the person who's WikiTree ID is returned by {@link #getResultWikiTreeID()}.
+
      @return the base person's profile.
      */
 
@@ -366,6 +384,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     /**
      Get the ancestors of the base person (the person who's ancestors were used to create this instance).
+
      @return a list of the base person's ancestor's {@link WikiTreePersonProfile} instances.
      The list will include the profile for the person who's WikiTree ID or Person.Id was used to create this instance.
      */
@@ -393,17 +412,19 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      tree has no loops in it. In other words, even in the presumably very unlikely event that the WikiTree API server returns a tree
      that has loops in it, you should not get a tree that has loops in it from this method. Again, please contact me if you find any
      counter-examples.
+
      @return the ancestral tree.
      */
 
     public WikiTreePersonProfile getAncestralTree() {
 
-	return _ancestralTree;
+        return _ancestralTree;
 
     }
 
     /**
      Get a sorted map of this instance's {@link WikiTreePersonProfile} instances mapped by their {@code Person.Id}.
+
      @return a {@link SortedMap<Long,WikiTreePersonProfile>} of this instance's {@link WikiTreePersonProfile} instances
      mapped by their {@code Person.Id}.
      Note that this map contains all the WikiTreePersonProfile instances held by this instance (i.e. used to create this instance).
@@ -421,6 +442,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
 
     /**
      Get a sorted map of this instance's {@link WikiTreePersonProfile} instances mapped by their WikiTree ID.
+
      @return a {@link SortedMap<Long,WikiTreePersonProfile>} of this instance's {@link WikiTreePersonProfile} instances
      mapped by their {@code WikiTree ID}.
      Note that this map contains all the WikiTreePersonProfile instances held by this instance (i.e. used to create this instance).
@@ -430,7 +452,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      whole loops in ancestral trees business.
      */
 
-    public SortedMap<String, WikiTreePersonProfile> getProfilesByWikiTreeId() {
+    public SortedMap<WikiTreeId, WikiTreePersonProfile> getProfilesByWikiTreeId() {
 
         return _profilesByWikiTreeId;
 
@@ -449,6 +471,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      this instance (see {@link #getAncestralTree()} for more info regarding this instance's ancestral tree).
      Consequently, there is no additional cost associated with asking for this mapping. Keeping the mapping so that it can
      be provided when requested costs a really quite minimal amount of memory.
+
      @return a {@link SortedMap<Long,WikiTreePersonProfile>} of this instance's {@link WikiTreePersonProfile} instances
      who's mothers are also in this instance.
      */
@@ -472,6 +495,7 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
      this instance (see {@link #getAncestralTree()} for more info regarding this instance's ancestral tree).
      Consequently, there is no additional cost associated with asking for this mapping. Keeping the mapping so that it can
      be provided when requested costs a really quite minimal amount of memory.
+
      @return a {@link SortedMap<Long,WikiTreePersonProfile>} of this instance's {@link WikiTreePersonProfile} instances
      who's fathers are also in this instance.
      */
@@ -485,12 +509,12 @@ public class WikiTreeAncestors extends WikiTreeWrapper {
     public String toString() {
 
         return
-		"WikiTreeAncestors( " +
-		"requestKey=\"" + _requestKey + "\", " +
-		"requestDepth=" + getRequestDepth() + ", " +
-		"resultUserName=" + getResultWikiTreeID() + ", " +
-		"count=" + _resultAncestors.size() + " " +
-		")";
+                "WikiTreeAncestors( " +
+                "requestKey=\"" + _requestKey + "\", " +
+                "requestDepth=" + getRequestDepth() + ", " +
+                "resultUserName=" + getResultWikiTreeID() + ", " +
+                "count=" + _resultAncestors.size() + " " +
+                ")";
 
     }
 

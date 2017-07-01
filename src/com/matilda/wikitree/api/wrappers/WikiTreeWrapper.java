@@ -16,6 +16,7 @@ public class WikiTreeWrapper extends JSONObject {
     private WikiTreeRequestType _requestType = WikiTreeRequestType.UNSPECIFIED;
 
     protected WikiTreeWrapper( @NotNull JSONObject jsonObject ) {
+
         super( jsonObject );
 
     }
@@ -24,22 +25,22 @@ public class WikiTreeWrapper extends JSONObject {
 
         if ( requestType == WikiTreeRequestType.UNSPECIFIED ) {
 
-	    throw new IllegalArgumentException(
-		    "WikiTreeWrapper.setRequestType:  cannot set request type to " + WikiTreeRequestType.UNSPECIFIED
-	    );
+            throw new IllegalArgumentException(
+                    "WikiTreeWrapper.setRequestType:  cannot set request type to " + WikiTreeRequestType.UNSPECIFIED
+            );
 
-	} else if ( _requestType == WikiTreeRequestType.UNSPECIFIED ) {
+        } else if ( _requestType == WikiTreeRequestType.UNSPECIFIED ) {
 
-	    _requestType = requestType;
+            _requestType = requestType;
 
-	} else {
+        } else {
 
             throw new IllegalArgumentException(
-            	"WikiTreeWrapper.setRequestType:  request type can only be set once (is " + _requestType +
-		", asked to set to " + requestType + ")"
-	    );
+                    "WikiTreeWrapper.setRequestType:  request type can only be set once (is " + _requestType +
+                    ", asked to set to " + requestType + ")"
+            );
 
-	}
+        }
 
     }
 

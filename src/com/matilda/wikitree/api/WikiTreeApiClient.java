@@ -29,9 +29,9 @@ import java.io.IOException;
  is as follows:
  <blockquote><pre>
  public String getBaseServerUrlString() {
-
-     return getWrappedJsonWikiTreeApiClient().getBaseServerUrlString();
-
+ <p>
+ return getWrappedJsonWikiTreeApiClient().getBaseServerUrlString();
+ <p>
  }
  </pre>
  </blockquote></li>
@@ -43,6 +43,7 @@ public interface WikiTreeApiClient {
 
     /**
      Get the base WikiTree app server URL that this instance will augment when processing/implementing API requests.
+
      @return the base URL that this instance will augment when processing/implementing API requests.
      */
 
@@ -50,6 +51,7 @@ public interface WikiTreeApiClient {
 
     /**
      Get the most recent login attempt's result status.
+
      @return a variety of return values are possible including
      <ul>
      <li>{@code "Success"} if the most recent attempt works</li>
@@ -67,6 +69,7 @@ public interface WikiTreeApiClient {
     /**
      Determine if this instance is currently authenticated.
      <p/>See {@link WikiTreeApiJsonSession#isAuthenticated()} for more information.
+
      @return {@code true} if this instance is currently authenticated; {@code false} otherwise.
      */
 
@@ -74,6 +77,7 @@ public interface WikiTreeApiClient {
 
     /**
      Get the email address used to authenticate this instance.
+
      @return the email address used to authenticate this instance or {@code null} if this instance is not currently authenticated.
      */
 
@@ -81,6 +85,7 @@ public interface WikiTreeApiClient {
 
     /**
      Get the WikiTree ID of the WikiTree user used to authenticate this instance.
+
      @return the WikiTreeId of the WikiTree user used to authenticate this instance.
      This method returns {@code null} if this instance is not currently authenticated.
      <p/>For example, if <a href="https://www.wikitree.com/wiki/Weisz-93">Erik (Weisz) Houdini</a>
@@ -97,20 +102,21 @@ public interface WikiTreeApiClient {
      If unsuccessful, this instance either remains or becomes an anonymous WikiTree API client instance with respect to this instance's WikiTree API server.
      <p/>See {@link WikiTreeApiJsonSession#WikiTreeApiJsonSession()} for more information about anonymous vs authenticated WikiTree API client instances.
      <p/>See {@link WikiTreeApiJsonSession#WikiTreeApiJsonSession(String)} for more info on using alternative WikiTree API servers.
+
      @param emailAddress the email address associated with a www.wikitree.com account.
-     @param password the password associated with the same www.wikitree.com account.
+     @param password     the password associated with the same www.wikitree.com account.
      @return {@code true} if the login request succeeded (valid www.wikitree.com account email address and associated password and no "technical difficulties"
      between here and the WikiTree API server).
      <p/>Note that if this method returns {@code false} then this instance is now an anonymous WikiTree API client instance
      regardless of whether or not it was an authenticated WikiTree API client instance before it called this method.
-     @throws IOException if an IOException is thrown by the networking facilities used to send and receive the login request.
+     @throws IOException    if an IOException is thrown by the networking facilities used to send and receive the login request.
      @throws ParseException if this client is unable to process the response from the WikiTree API server. Seeing this exception should be a rather rare occurrence.
      If you do see one, you have probably encountered a bug in this software. Please notify danny@matilda.com if you get this exception (be prepared to work with Danny
      to reproduce the problem).
      */
 
     boolean login( @NotNull String emailAddress, @NotNull String password )
-	    throws IOException, ParseException;
+            throws IOException, ParseException;
 
     /**
      The biological genders.
@@ -118,9 +124,13 @@ public interface WikiTreeApiClient {
 
     enum BiologicalGender {
 
-	UNKNOWN,
-	MALE,
-	FEMALE;
+        UNKNOWN { public String childGender() { return "child"; }  public String parentGender() { return "parent"; } public String siblingGender() { return "sibling"; } },
+        MALE { public String childGender() { return "son"; }  public String parentGender() { return "father"; } public String siblingGender() { return "brother"; } },
+        FEMALE { public String childGender() { return "daughter"; }  public String parentGender() { return "mother"; } public String siblingGender() { return "sister"; } };
+
+        public abstract String childGender();
+        public abstract String parentGender();
+        public abstract String siblingGender();
 
     }
 

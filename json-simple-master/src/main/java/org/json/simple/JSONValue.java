@@ -20,6 +20,7 @@ import org.json.simple.parser.ParseException;
 /**
  * @author FangYidong<fangyidong@yahoo.com.cn>
  */
+@SuppressWarnings("ALL")
 public class JSONValue {
 	/**
 	 * Parse JSON text into java object from the input source. 
@@ -298,7 +299,7 @@ public class JSONValue {
 				break;
 			default:
                 //Reference: http://www.unicode.org/versions/Unicode5.1.0/
-				if((ch>='\u0000' && ch<='\u001F') || (ch>='\u007F' && ch<='\u009F') || (ch>='\u2000' && ch<='\u20FF')){
+				if( ch <= '\u001F' || ch >= '\u007F' && ch <= '\u009F' || ch >= '\u2000' && ch <= '\u20FF' ){
 					String ss=Integer.toHexString(ch);
 					sb.append("\\u");
 					for(int k=0;k<4-ss.length();k++){

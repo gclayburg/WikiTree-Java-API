@@ -4,6 +4,7 @@
 
 package com.matilda.wikitree.api.wrappers;
 
+import com.matilda.wikitree.api.exceptions.WikiTreeRequestFailedException;
 import com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession;
 import com.matilda.wikitree.api.util.WikiTreeApiUtilities;
 import org.jetbrains.annotations.NotNull;
@@ -13,34 +14,38 @@ import org.json.simple.JSONObject;
  A WikiTree space profile.
  */
 
+@SuppressWarnings("ALL")
 public class WikiTreeSpaceProfile extends WikiTreeProfile {
 
     /**
      Construct a wrapper for a space profile.
+
      @param rval a {@link JSONObject} which is of the form returned by {@link WikiTreeApiJsonSession#getProfile(String)}.
      */
 
-    public WikiTreeSpaceProfile( @NotNull JSONObject rval ) {
-	super( rval, new String[] { "profile" } );
+    public WikiTreeSpaceProfile( @NotNull JSONObject rval ) throws WikiTreeRequestFailedException {
 
-	if ( containsKey( "page_name" ) ) {
+        super( rval, new String[]{ "profile" } );
 
-	    setRequestType( WikiTreeRequestType.SPACE_NAME );
+        if ( containsKey( "page_name" ) ) {
+
+            setRequestType( WikiTreeRequestType.SPACE_NAME );
 
 //	} else if ( containsKey( "user_id" ) ) {
 //
 //	    setRequestType( WikiTreeRequestType.PERSON_ID );
 
-	} else {
+        } else {
 
-	    setRequestType( WikiTreeRequestType.UNKNOWN );
+            setRequestType( WikiTreeRequestType.UNKNOWN );
 
-	}
+        }
 
     }
 
     /**
      Get this instance's name.
+
      @return This space profile's name.
      */
 
@@ -52,12 +57,13 @@ public class WikiTreeSpaceProfile extends WikiTreeProfile {
 
     /**
      Get this instance's PageId.
+
      @return This space profile's PageId.
      */
 
     public String getPageId() {
 
-        return (String) WikiTreeApiUtilities.getMandatoryJsonValue( this, "PageId" );
+        return (String)WikiTreeApiUtilities.getMandatoryJsonValue( this, "PageId" );
 
     }
 

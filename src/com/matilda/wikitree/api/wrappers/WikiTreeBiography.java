@@ -16,86 +16,101 @@ public class WikiTreeBiography extends WikiTreeWrapper {
 
     /**
      Create a biography from the specified JSON object.
-     @param key the key that was used to fetch the biography (used to determine the request type).
+
+     @param key       the key that was used to fetch the biography (used to determine the request type).
      @param bioObject the specified JSON object.
-     Assumed to be in the form returned by {@link WikiTreeApiJsonSession#getBio(String)}.
+     Assumed to be in the form returned by {@link WikiTreeApiJsonSession#getBio(WikiTreeId)}.
      */
 
-    public WikiTreeBiography( String key, @NotNull JSONObject bioObject ) {
-	super( bioObject );
+    public WikiTreeBiography( WikiTreeId key, @NotNull JSONObject bioObject ) {
 
-	try {
+        super( bioObject );
 
-	    //noinspection ResultOfMethodCallIgnored
-	    Integer.parseInt( key );
-	    setRequestType( WikiTreeRequestType.PERSON_ID );
+        if ( key.isIdName() ) {
 
-	} catch ( NumberFormatException e ) {
+            setRequestType( WikiTreeRequestType.WIKITREE_ID );
 
-	    setRequestType( WikiTreeRequestType.WIKITREE_ID );
+        } else {
 
-	}
+            setRequestType( WikiTreeRequestType.PERSON_ID );
+
+        }
+//	try {
+//
+//	    //noinspection ResultOfMethodCallIgnored
+//	    Integer.parseInt( key );
+//	    setRequestType( WikiTreeRequestType.PERSON_ID );
+//
+//	} catch ( NumberFormatException e ) {
+//
+//	    setRequestType( WikiTreeRequestType.WIKITREE_ID );
+//
+//	}
 
     }
 
     /**
      Get the person's Person.Id.
+
      @return the person's Person.Id.
      */
 
     public int getPersonId() {
 
-	Object personIdObj = get( "user_id" );
-	if ( personIdObj == null ) {
+        Object personIdObj = get( "user_id" );
+        if ( personIdObj == null ) {
 
-	    return -1;
+            return -1;
 
-	} else if ( personIdObj instanceof String ) {
+        } else if ( personIdObj instanceof String ) {
 
-	    try {
+            try {
 
-		return Integer.parseInt( (String)personIdObj );
+                return Integer.parseInt( (String)personIdObj );
 
-	    } catch ( NumberFormatException e ) {
+            } catch ( NumberFormatException e ) {
 
-		throw new ReallyBadNewsError( "WikiTreeBiography.getPersonId:  user_id is not parseable as an integer" );
+                throw new ReallyBadNewsError( "WikiTreeBiography.getPersonId:  user_id is not parseable as an integer" );
 
-	    }
+            }
 
-	} else if ( personIdObj instanceof Number ) {
+        } else if ( personIdObj instanceof Number ) {
 
-	    return ((Number)personIdObj).intValue();
+            return ( (Number)personIdObj ).intValue();
 
-	} else {
+        } else {
 
-	    throw new ReallyBadNewsError( "WikiTreeBiography.getPersonId:  user_id is not a String, a Number or null; it's a " + personIdObj.getClass().getCanonicalName() );
+            throw new ReallyBadNewsError( "WikiTreeBiography.getPersonId:  user_id is not a String, a Number or null; it's a " +
+                                          personIdObj.getClass().getCanonicalName() );
 
-	}
+        }
 
     }
 
     /**
      Get the person's WikiTree ID.
+
      @return the person's WikiTree ID or {@code "Id=" + getPersonId()} if the person's WikiTree ID is unavailable (not sure if that is even possible).
      */
 
     @NotNull
     public String getWikiTreeId() {
 
-	Object wikiTreeIdObj = get( "page_name" );
-	if ( wikiTreeIdObj == null ) {
+        Object wikiTreeIdObj = get( "page_name" );
+        if ( wikiTreeIdObj == null ) {
 
-	    return "Id=" + getPersonId();
+            return "Id=" + getPersonId();
 
-	} else if ( wikiTreeIdObj instanceof String ) {
+        } else if ( wikiTreeIdObj instanceof String ) {
 
-	    return (String)wikiTreeIdObj;
+            return (String)wikiTreeIdObj;
 
-	} else {
+        } else {
 
-	    throw new ReallyBadNewsError( "WikiTreePersonProfile.getWikiTreeId:  WikiTreeId is neither null or a String; it's a " + wikiTreeIdObj.getClass().getCanonicalName() );
+            throw new ReallyBadNewsError( "WikiTreePersonProfile.getWikiTreeId:  WikiTreeId is neither null or a String; it's a " +
+                                          wikiTreeIdObj.getClass().getCanonicalName() );
 
-	}
+        }
 
     }
 
@@ -106,26 +121,26 @@ public class WikiTreeBiography extends WikiTreeWrapper {
     @NotNull
     public String getBio() {
 
-	Object bioObj = get( "bio" );
-	if ( bioObj instanceof String ) {
+        Object bioObj = get( "bio" );
+        if ( bioObj instanceof String ) {
 
-	    return (String)bioObj;
+            return (String)bioObj;
 
-	} else if ( bioObj == null ) {
+        } else if ( bioObj == null ) {
 
-	    throw new ReallyBadNewsError( "WikiTreeBiography.getBio:  no bio (should be impossible)" );
+            throw new ReallyBadNewsError( "WikiTreeBiography.getBio:  no bio (should be impossible)" );
 
-	} else {
+        } else {
 
-	    throw new ReallyBadNewsError( "WikiTreeBiography.getBio:  bio is not a String; it's a " + bioObj.getClass().getCanonicalName() );
+            throw new ReallyBadNewsError( "WikiTreeBiography.getBio:  bio is not a String; it's a " + bioObj.getClass().getCanonicalName() );
 
-	}
+        }
 
     }
 
     public String toString() {
 
-	return "WikiTreeBio( PageName=" + getWikiTreeId() + ", Id=" + getPersonId() + ", bio=" + getBio() + " )";
+        return "WikiTreeBio( PageName=" + getWikiTreeId() + ", Id=" + getPersonId() + ", bio=" + getBio() + " )";
 
     }
 

@@ -1,4 +1,3 @@
-
 /*
  * Copyright © 2017 Daniel Boulet
  */
@@ -8,7 +7,7 @@
  <p/> This API supports the same requests that the 'official' WikiTree API supports.
  See <a href="https://www.wikitree.com/wiki/Help:API_Documentation">https://www.wikitree.com/wiki/Help:API_Documentation</a> for more
  information on said 'official' WikiTree API.
-
+ <p>
  <h3>Organization</h3>
  This API is implemented in two layers:
  <ul>
@@ -20,9 +19,9 @@
  This layer involves a rather larger collection of classes although the key class is almost certainly
  {@link com.matilda.wikitree.api.wrappers.WikiTreeApiWrappersSession}</li>
  </ul>
-
+ <p>
  <h3>Using the upper layer API</h3>
-
+ <p>
  <h3>Using the bottom layer API</h3>
  The bottom layer API provides a JSON-based session-oriented interface to the 'official' WikiTree API.
  While you are free to use this layer, you will almost certainly find the upper layer to be easier to use.
@@ -33,17 +32,17 @@
  <pre>WikiTreeApiClient session = new WikiTreeApiJsonSession();</pre>
  </blockquote>
  Once the session instance exists, it is usually necessary to authenticate the session using
- {@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#login(String,String)}.
+ {@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#login(String, String)}.
  This method returns {@code true} if the login worked and {@code false} if the login failed due to an authentication-related issue (for example, incorrect password):
  <blockquote>
  <pre>
  if ( session.login( "fred@example.com", "fred's secret password" ) ) {
 
-     // the real action happens here.
+ // the real action happens here.
 
  } else {
 
-     // Oops!
+ // Oops!
 
  }
  </pre>
@@ -64,13 +63,13 @@
  <p/>Once the session has been authenticated (or not as appropriate), the rest of this API comes into play as the user issues calls to the following methods
  (each of which corresponds to a request supported by the 'official' WikiTree API (see above link for more information)):
  <ul>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getPerson(String)}</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getPerson(String,String)} (less useful variant)</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getProfile(String)}</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getBio(String)}</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getWatchlist(Boolean,Boolean,Boolean,Boolean,String,Integer,Integer,String)}</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getAncestors(String,Integer)}</li>
- <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getRelatives(String,boolean,boolean,boolean,boolean)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getPerson(com.matilda.wikitree.api.wrappers.WikiTreeId)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getPerson(String, String)} (less useful variant)</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getProfile(com.matilda.wikitree.api.wrappers.WikiTreeId)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getBio(com.matilda.wikitree.api.wrappers.WikiTreeId)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getWatchlist(Boolean, Boolean, Boolean, Boolean, String, Integer, Integer, String)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getAncestors(com.matilda.wikitree.api.wrappers.WikiTreeId, Integer)}</li>
+ <li>{@link com.matilda.wikitree.api.jsonclient.WikiTreeApiJsonSession#getRelatives(String, boolean, boolean, boolean, boolean)}</li>
  </ul>
  Successful calls to each of the above methods return a JSON object containing the results.
  Unsuccessful calls either return {@code null} or a JSON object which describes why the request failed.
@@ -85,7 +84,6 @@
  unless you are <u>certain</u> that you need more than one; also, try to avoid having multiple threads making simultaneous requests to the WikiTree API server
  as that server is most definitely a 'limited resource')</li>
  </ul>
-
  */
 
 package com.matilda.wikitree.api;
