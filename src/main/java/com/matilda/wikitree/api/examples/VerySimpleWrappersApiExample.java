@@ -41,7 +41,7 @@ public class VerySimpleWrappersApiExample {
         // ###### If you don't have a WikiTree account then just comment out the maybeLoginToWikiTree call below.
         // ###### Other than that you won't get a watchlist (it will be empty), everything should work since this example uses public profiles.
 
-        WikiTreeApiUtilities.maybeLoginToWikiTree( session, new String[]{ ".wikiTreeUserInfo.wtu" } );
+//        WikiTreeApiUtilities.maybeLoginToWikiTree( session, new String[]{ ".wikiTreeUserInfo.wtu" } );
 
         // Let's see who owns the session.
 
